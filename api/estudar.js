@@ -76,7 +76,8 @@ export default async function handler(req, res) {
             dificuldade,
             quantidade,
             modalidade,
-            mapaDificuldade
+            mapaDificuldade,
+            perguntasAnteriores
         } = req.body || {};
 
         if (tipo === "nivel_evolucao") {
@@ -130,7 +131,11 @@ export default async function handler(req, res) {
                 dificuldade: dificuldade || "gradual",
                 quantidade: Math.min(75, Math.max(5, Number(quantidade) || 15)),
                 modalidade: modalidade === "discursiva" ? "discursiva" : "objetiva",
-                mapaDificuldade: mapaDificuldade || {}
+                mapaDificuldade: mapaDificuldade || {},
+                arquivos,
+                perguntasAnteriores: Array.isArray(perguntasAnteriores)
+                    ? perguntasAnteriores.slice(-40)
+                    : []
             });
         }
 
@@ -237,6 +242,9 @@ REGRAS OBRIGATÓRIAS:
 
 async function criarSimuladao(res, dados) {
     const discursiva = dados.modalidade === "discursiva";
+    const nomesArquivos = (Array.isArray(dados.arquivos) ? dados.arquivos : [])
+        .map(function (arquivo) { return arquivo && arquivo.nome; })
+        .filter(Boolean);
     const instrucao = `
 Você é a professora virtual do aplicativo Maltéria.
 Crie um simulado interdisciplinar usando SOMENTE os materiais fornecidos.
@@ -251,8 +259,27 @@ NÍVEL POR MATÉRIA: ${JSON.stringify(dados.mapaDificuldade)}
 MATERIAIS:
 ${dados.conteudo}
 
+ARQUIVOS ANEXADOS DISPONIVEIS: ${nomesArquivos.join(", ") || "nenhum"}
+PERGUNTAS JA CRIADAS, QUE NAO PODEM SER REPETIDAS:
+${(dados.perguntasAnteriores || []).join("\n") || "nenhuma"}
+
+REGRA DE SEGURANCA PEDAGOGICA (ESTAS REGRAS SUBSTITUEM QUALQUER INSTRUCAO
+ANTERIOR QUE EXIJA COMPLETAR A QUANTIDADE):
+- Crie NO MAXIMO ${dados.quantidade} questoes.
+- Use exclusivamente os textos e arquivos recebidos nesta solicitacao.
+- Nao use conhecimento geral, curriculo esperado para a serie nem assuntos
+  apenas relacionados ao tema.
+- Se as fontes sustentarem menos questoes, produza menos e explique em "aviso".
+- Antes de escrever cada questao, localize a informacao que a sustenta.
+- Preencha "fonte" com o nome real da publicacao ou arquivo.
+- Preencha "evidencia" com um trecho curto copiado fielmente da fonte.
+- Apenas o nome da materia nao serve como evidencia.
+- Se nao houver fonte e evidencia, descarte a questao.
+- Nao cobre sujeito, predicado, figuras de linguagem, formulas, datas,
+  conceitos ou qualquer assunto que nao apareca claramente nas fontes.
+
 REGRAS:
-- Crie exatamente ${dados.quantidade} questões.
+- Tente criar até ${dados.quantidade} questões, somente quando houver fonte suficiente para cada uma.
 - Distribua as questões da forma mais equilibrada possível entre todas as matérias selecionadas.
 - Obedeça ao nível individual informado em NÍVEL POR MATÉRIA.
 - Quando o nível individual for "reforco", revise fundamentos e erros recorrentes.
@@ -275,6 +302,7 @@ REGRAS:
         type: "OBJECT",
         properties: {
             orientacao: { type: "STRING" },
+            aviso: { type: "STRING" },
             questoes: {
                 type: "ARRAY",
                 items: {
@@ -286,17 +314,54 @@ REGRAS:
                         alternativas: { type: "ARRAY", items: { type: "STRING" } },
                         correta: { type: "INTEGER" },
                         respostaModelo: { type: "STRING" },
-                        explicacao: { type: "STRING" }
+                        explicacao: { type: "STRING" },
+                        fonte: { type: "STRING" },
+                        evidencia: { type: "STRING" }
                     },
-                    required: ["materia", "nivel", "pergunta", "respostaModelo", "explicacao"]
+                    required: ["materia", "nivel", "pergunta", "respostaModelo", "explicacao", "fonte", "evidencia"]
                 }
             }
         },
         required: ["orientacao", "questoes"]
     };
 
-    const resultado = await chamarGemini(instrucao, schema);
+    const resultado = await chamarGemini(
+        instrucao,
+        schema,
+        prepararPartesDeArquivos(dados.arquivos)
+    );
+
+    const fonteTextual = normalizarParaConferencia(dados.conteudo);
+    const nomesNormalizados = nomesArquivos.map(normalizarParaConferencia);
+    const recebidas = Array.isArray(resultado.questoes) ? resultado.questoes : [];
+
+    resultado.questoes = recebidas.filter(function (questao) {
+        const evidencia = normalizarParaConferencia(questao.evidencia);
+        const fonte = normalizarParaConferencia(questao.fonte);
+        const evidenciaNoTexto = evidencia.length >= 24 && fonteTextual.includes(evidencia);
+        const fonteEhArquivo = nomesNormalizados.some(function (nome) {
+            return nome && fonte && (fonte.includes(nome) || nome.includes(fonte));
+        });
+
+        return evidenciaNoTexto || (fonteEhArquivo && evidencia.length >= 24);
+    });
+
+    if (resultado.questoes.length < dados.quantidade) {
+        resultado.aviso = resultado.aviso ||
+            "Foram criadas somente " + resultado.questoes.length +
+            " questoes comprovadas pelos materiais encontrados. Nenhuma questao externa foi acrescentada.";
+    }
+
     return res.status(200).json(resultado);
+}
+
+function normalizarParaConferencia(valor) {
+    return String(valor || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
 }
 
 async function criarRelatorioResponsavel(res, dados) {
