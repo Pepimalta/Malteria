@@ -2589,10 +2589,13 @@ function mostrarUpload() {
                         await arquivo.text();
                 }
 
-                if (arquivo.type === "application/pdf") {
+                if (
+                    arquivo.type === "application/pdf" ||
+                    arquivo.type.startsWith("image/")
+                ) {
                     const preparado = await prepararArquivoEvolucao(
                         arquivo,
-                        "material_pdf"
+                        arquivo.type === "application/pdf" ? "material_pdf" : "foto_da_folha"
                     );
 
                     arquivoIA = {
@@ -2602,7 +2605,9 @@ function mostrarUpload() {
                         tamanho: preparado.tamanho
                     };
 
-                    texto = "PDF integral preparado para leitura pela IA.";
+                    texto = arquivo.type === "application/pdf"
+                        ? "PDF integral preparado para leitura pela IA."
+                        : "Foto da folha preparada para leitura pela IA.";
                 }
 
                 uploadsDaSessao.push({
@@ -2734,6 +2739,7 @@ async function criarSimuladoDaMateria() {
     status.textContent = "Lendo os materiais da disciplina...";
 
     try {
+        arquivosPdfParaIA = [];
         const conteudo = await obterConteudoSimuladao([materiaAtual], inicio, fim);
         status.textContent = "Criando " + quantidade + " questões em partes, para manter a qualidade...";
         const dados = await gerarQuestoesEmLotes({
@@ -4120,6 +4126,13 @@ async function obterEventosAgenda(
                     return;
                 }
 
+                // Datas de eventos de dia inteiro chegam como AAAA-MM-DD.
+                // Criá-las diretamente com new Date() usa UTC e, no Brasil,
+                // pode deslocar o evento para o dia anterior.
+                const dataEvento = evento.start?.date
+                    ? new Date(evento.start.date + "T12:00:00")
+                    : new Date(inicioEvento);
+
                 fontes.push({
                     chave:
                         "agenda-" +
@@ -4149,10 +4162,10 @@ async function obterEventosAgenda(
                         ),
 
                     data:
-                        new Date(inicioEvento),
+                        dataEvento,
 
                     prazo:
-                        new Date(inicioEvento),
+                        dataEvento,
 
                     link:
                         criarLinkDaAgendaEscolar(
@@ -5200,12 +5213,13 @@ async function carregarRelatorioResponsavel() {
         return;
     }
 
-    const inicio = new Date(dataReferencia + "T12:00:00");
+    // A janela deve voltar a partir da data que será preparada, e não
+    // a partir do dia em que a consulta está sendo feita. Exemplo:
+    // 8 semanas para 08/05 consulta março-maio, mesmo que hoje seja julho.
+    const inicio = new Date(dataAlvo + "T12:00:00");
     inicio.setDate(inicio.getDate() - dias);
     const dataInicio = dataParaCampo(inicio);
-    const dataFimConsulta = dataAlvo > dataReferencia
-        ? dataAlvo
-        : dataReferencia;
+    const dataFimConsulta = dataAlvo;
 
     botao.disabled = true;
     botao.textContent = "Atualizando...";
@@ -5221,6 +5235,11 @@ async function carregarRelatorioResponsavel() {
             dataFimConsulta
         );
         const horarioSalvo = lerHorarioSemanalResponsavel();
+        const entregasLocais = eventosEscolares
+            .map(function (item) {
+                return criarEntregaLocalDaAgenda(item, dataAlvo, horarioSalvo);
+            })
+            .filter(Boolean);
 
         const conteudoAgenda = eventosEscolares.map(function (item) {
             return (
@@ -5264,6 +5283,10 @@ async function carregarRelatorioResponsavel() {
                     (turmasOficiais || "Nenhuma turma oficial carregada.") +
                     "\n\n=== CLASSROOM E HORÁRIO ===\n" +
                     contextoClassroom +
+                    "\n\n=== ENTREGAS CONFIRMADAS PELO CÁLCULO LOCAL ===\n" +
+                    (entregasLocais.length
+                        ? JSON.stringify(entregasLocais)
+                        : "Nenhuma entrega pôde ser confirmada automaticamente.") +
                     "\n\n=== HORÁRIO CONFIRMADO EM CONSULTA ANTERIOR ===\n" +
                     (horarioSalvo.length
                         ? JSON.stringify(horarioSalvo)
@@ -5278,6 +5301,8 @@ async function carregarRelatorioResponsavel() {
         if (!resposta.ok) {
             throw new Error(dados.erro || "Não foi possível preparar o relatório.");
         }
+
+        incorporarEntregasLocaisNoRelatorio(dados, entregasLocais);
 
         if (
             dados.horarioEncontrado === true &&
@@ -5335,6 +5360,163 @@ function nomeDoDiaDaSemana(data) {
         "pt-BR",
         { weekday: "long" }
     );
+}
+
+function textoPareceEntregaDaAgenda(texto) {
+    return /\b(?:dever|tarefa|para casa|exercicio|lista|pagina|folha|trabalho|projeto|seminario|apresentacao|pesquisa|entrega|prova|teste|avaliacao)\b/.test(
+        normalizarPesquisa(texto)
+    );
+}
+
+function indiceDoDiaDaSemana(texto) {
+    const dia = normalizarPesquisa(texto);
+    if (dia.includes("domingo")) return 0;
+    if (dia.includes("segunda")) return 1;
+    if (dia.includes("terca")) return 2;
+    if (dia.includes("quarta")) return 3;
+    if (dia.includes("quinta")) return 4;
+    if (dia.includes("sexta")) return 5;
+    if (dia.includes("sabado")) return 6;
+    return -1;
+}
+
+function proximaDataComDiaDaSemana(dataRegistro, diaSemana) {
+    const resultado = new Date(dataRegistro);
+    let diferenca = (diaSemana - resultado.getDay() + 7) % 7;
+    if (diferenca === 0) diferenca = 7;
+    resultado.setDate(resultado.getDate() + diferenca);
+    return resultado;
+}
+
+function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
+    const textoOriginal = (item.titulo || "") + " " + (item.descricao || "");
+    const texto = normalizarPesquisa(textoOriginal);
+    const registro = new Date(item.data);
+    let entrega = null;
+    let regra = "";
+
+    if (/\bdepois de amanha\b/.test(texto)) {
+        entrega = new Date(registro);
+        entrega.setDate(entrega.getDate() + 2);
+        regra = "O aviso diz ‘depois de amanhã’.";
+    } else if (/\b(?:para|pra|p) amanha\b/.test(texto)) {
+        entrega = new Date(registro);
+        entrega.setDate(entrega.getDate() + 1);
+        regra = "O aviso diz ‘para amanhã’.";
+    }
+
+    if (!entrega) {
+        const dataCompleta = texto.match(/\b(?:dia\s*)?(\d{1,2})[\/-](\d{1,2})(?:[\/-](\d{2,4}))?\b/);
+        if (dataCompleta) {
+            let ano = dataCompleta[3] ? Number(dataCompleta[3]) : registro.getFullYear();
+            if (ano < 100) ano += 2000;
+            entrega = new Date(ano, Number(dataCompleta[2]) - 1, Number(dataCompleta[1]), 12);
+            if (!dataCompleta[3] && entrega < registro) entrega.setFullYear(entrega.getFullYear() + 1);
+            regra = "O aviso informa a data " + dataCompleta[0] + ".";
+        }
+    }
+
+    if (!entrega) {
+        const somenteDia = texto.match(/\b(?:para|pro|ate)\s+(?:o\s+)?dia\s+(\d{1,2})\b/);
+        if (somenteDia) {
+            entrega = new Date(registro.getFullYear(), registro.getMonth(), Number(somenteDia[1]), 12);
+            if (entrega <= registro) entrega.setMonth(entrega.getMonth() + 1);
+            regra = "O aviso informa o dia " + somenteDia[1] + ".";
+        }
+    }
+
+    if (!entrega) {
+        const diaEscrito = texto.match(/\b(?:para|pra|na)\s+(segunda|terca|quarta|quinta|sexta|sabado|domingo)(?:-feira)?\b/);
+        if (diaEscrito) {
+            const indice = indiceDoDiaDaSemana(diaEscrito[1]);
+            if (indice >= 0) {
+                entrega = proximaDataComDiaDaSemana(registro, indice);
+                regra = "O aviso indica " + diaEscrito[1] + ".";
+            }
+        }
+    }
+
+    if (!entrega && /\bproxima aula\b/.test(texto) && Array.isArray(horarioSemanal)) {
+        const materia = normalizarPesquisa(item.materia || item.calendarioOriginal || "");
+        const entradaHorario = horarioSemanal.find(function (entrada) {
+            return (entrada.aulas || []).some(function (aula) {
+                const nomeAula = normalizarPesquisa(aula);
+                return nomeAula.includes(materia) || materia.includes(nomeAula);
+            });
+        });
+        const indice = entradaHorario ? indiceDoDiaDaSemana(entradaHorario.dia) : -1;
+        if (indice >= 0) {
+            entrega = proximaDataComDiaDaSemana(registro, indice);
+            regra = "O aviso diz ‘próxima aula’ e foi cruzado com o horário salvo.";
+        }
+    }
+
+    if (!entrega && textoPareceEntregaDaAgenda(textoOriginal)) {
+        entrega = new Date(registro);
+        regra = "A tarefa está registrada diretamente nesta data na Agenda escolar.";
+    }
+
+    return entrega ? { data: dataParaCampo(entrega), regra: regra } : null;
+}
+
+function criarEntregaLocalDaAgenda(item, dataAlvo, horarioSemanal) {
+    const calculo = calcularEntregaLocalDaAgenda(item, horarioSemanal);
+    if (!calculo || calculo.data !== dataAlvo) return null;
+
+    return {
+        materia: item.materia || item.calendarioOriginal || "Matéria a confirmar",
+        tipo: identificarTipoAtividade({
+            title: item.titulo || "",
+            description: item.descricao || "",
+            materials: []
+        }),
+        titulo: item.titulo || "Tarefa registrada na Agenda",
+        dataEntrega: dataAlvo,
+        dataRegistro: dataParaCampo(new Date(item.data)),
+        origem: "Google Agenda",
+        justificativa: calculo.regra,
+        prioridade: "Alta"
+    };
+}
+
+function incorporarEntregasLocaisNoRelatorio(dados, entregasLocais) {
+    if (!dados || !Array.isArray(entregasLocais) || !entregasLocais.length) return;
+
+    const entregasDaIA = Array.isArray(dados.entregas) ? dados.entregas : [];
+    const mapa = new Map();
+    entregasDaIA.concat(entregasLocais).forEach(function (item) {
+        const chave = normalizarPesquisa(
+            (item.materia || "") + "|" + (item.titulo || "") + "|" + (item.dataEntrega || "")
+        );
+        if (!mapa.has(chave)) mapa.set(chave, item);
+    });
+    dados.entregas = Array.from(mapa.values());
+
+    const materias = Array.isArray(dados.materiasDoDia) ? dados.materiasDoDia : [];
+    entregasLocais.forEach(function (entrega) {
+        const nome = normalizarPesquisa(entrega.materia);
+        const existente = materias.find(function (item) {
+            const materia = normalizarPesquisa(item.materia);
+            return materia.includes(nome) || nome.includes(materia);
+        });
+        if (existente) {
+            existente.situacao = "Entrega encontrada";
+            existente.detalhe = entrega.titulo;
+        } else {
+            materias.push({
+                materia: entrega.materia,
+                situacao: "Entrega encontrada",
+                detalhe: entrega.titulo
+            });
+        }
+    });
+    dados.materiasDoDia = materias;
+
+    if (dados.entregas.length) {
+        dados.resumo = "Foram localizadas " + dados.entregas.length +
+            (dados.entregas.length === 1 ? " entrega" : " entregas") +
+            " para a data escolhida, após examinar a janela anterior a esse dia.";
+    }
 }
 
 function pistaLocalDeEntrega(item) {
@@ -6377,7 +6559,13 @@ async function lerArquivoDoDrive(id) {
 }
 
 function adicionarPdfParaIA(arquivo) {
-    if (!arquivo?.data || arquivo.mimeType !== "application/pdf") {
+    if (
+        !arquivo?.data ||
+        !(
+            arquivo.mimeType === "application/pdf" ||
+            arquivo.mimeType.startsWith("image/")
+        )
+    ) {
         return false;
     }
 
@@ -7166,13 +7354,22 @@ async function gerarQuestoesEmLotes(payload, quantidadeTotal) {
     const questoes = [];
     const orientacoes = [];
     const tamanhoDoLote = 20;
+    let tentativas = 0;
 
-    while (questoes.length < quantidadeTotal) {
+    while (questoes.length < quantidadeTotal && tentativas < 5) {
+        tentativas++;
         const quantidade = Math.min(tamanhoDoLote, quantidadeTotal - questoes.length);
         const resposta = await fetch(ENDERECO_IA, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ...payload, quantidade: quantidade })
+            body: JSON.stringify({
+                ...payload,
+                quantidade: quantidade,
+                arquivos: arquivosPdfParaIA,
+                perguntasAnteriores: questoes.map(function (questao) {
+                    return questao.pergunta || "";
+                })
+            })
         });
         const dados = await resposta.json();
 
@@ -7185,13 +7382,33 @@ async function gerarQuestoesEmLotes(payload, quantidadeTotal) {
             throw new Error("A IA não conseguiu criar questões com os materiais encontrados.");
         }
 
-        questoes.push(...novas.slice(0, quantidade));
+        const chavesExistentes = new Set(questoes.map(function (questao) {
+            return normalizarPesquisa(questao.pergunta || "");
+        }));
+        const comprovadasENovas = novas.filter(function (questao) {
+            const chave = normalizarPesquisa(questao.pergunta || "");
+            return Boolean(
+                chave &&
+                questao.fonte &&
+                questao.evidencia &&
+                !chavesExistentes.has(chave)
+            );
+        });
+
+        questoes.push(...comprovadasENovas.slice(0, quantidade));
         if (dados.orientacao) orientacoes.push(dados.orientacao);
+        if (dados.aviso) orientacoes.push(dados.aviso);
+
+        if (comprovadasENovas.length < quantidade) break;
     }
 
     return {
         questoes: questoes.slice(0, quantidadeTotal),
-        orientacao: orientacoes[0] || "Use o resultado para escolher o que revisar."
+        orientacao: orientacoes.join(" ") || "Use o resultado para escolher o que revisar.",
+        aviso: questoes.length < quantidadeTotal
+            ? "A Maltéria encontrou fonte suficiente para " + questoes.length +
+              " questões. As demais não foram inventadas."
+            : ""
     };
 }
 
@@ -7263,6 +7480,7 @@ async function criarSimuladaoGeral() {
     status.textContent = "Reunindo atividades e materiais das matérias escolhidas...";
 
     try {
+        arquivosPdfParaIA = [];
         const conteudo = await obterConteudoSimuladao(
             materias,
             dataParaCampo(inicio),
@@ -7308,6 +7526,7 @@ async function criarSimuladaoGeral() {
 }
 
 async function obterConteudoSimuladao(materias, inicio, fim) {
+    let anexosLidos = 0;
     let texto = `SIMULADÃO MALTÉRIA\nPERÍODO: ${inicio} até ${fim}\n`;
 
     for (const materia of materias) {
@@ -7322,17 +7541,47 @@ async function obterConteudoSimuladao(materias, inicio, fim) {
         const materiais = (respostas[1].courseWorkMaterial || [])
             .filter(function (item) { return itemEstaNoPeriodoDeEstudo(item, periodo); })
             .slice(0, 12);
+        const anexos = [];
 
         texto += `\n=== ${materia.name} ===\n`;
         atividades.forEach(function (item) {
+            recolherAnexos(item.materials, anexos);
             texto += "ATIVIDADE: " + (item.title || "") +
                 "\n" + (item.description || "") +
                 descreverMateriaisClassroom(item.materials) + "\n";
         });
         materiais.forEach(function (item) {
+            recolherAnexos(item.materials, anexos);
             texto += "MATERIAL: " + (item.title || "") +
                 "\n" + (item.description || "") +
                 descreverMateriaisClassroom(item.materials) + "\n";
+        });
+
+        const anexosUnicos = Array.from(new Map(anexos.map(function (anexo) {
+            return [anexo.id, anexo];
+        })).values()).slice(0, 8);
+
+        for (const anexo of anexosUnicos) {
+            try {
+                const conteudoAnexo = await lerArquivoDoDrive(anexo.id);
+                texto += "\nFONTE/ARQUIVO: " + anexo.nome +
+                    "\nCONTEUDO REAL DO ARQUIVO:\n" + conteudoAnexo + "\n";
+                anexosLidos++;
+            } catch (erro) {
+                console.warn("Nao foi possivel ler o anexo do simulado:", anexo.nome, erro);
+            }
+        }
+
+        const uploads = uploadsDaSessao.filter(function (upload) {
+            return String(upload.materiaId) === String(materia.id) &&
+                (!upload.data || (upload.data >= inicio && upload.data <= fim));
+        });
+
+        uploads.forEach(function (upload) {
+            texto += "\nFONTE/UPLOAD DO ALUNO: " + upload.nome +
+                "\nCONTEUDO INFORMADO:\n" +
+                (upload.texto || "Arquivo visual enviado para leitura.") + "\n";
+            if (upload.arquivoIA) adicionarPdfParaIA(upload.arquivoIA);
         });
 
         if (atividades.length + materiais.length === 0) {
@@ -7340,7 +7589,9 @@ async function obterConteudoSimuladao(materias, inicio, fim) {
         }
     }
 
-    if (texto.length < 180) {
+    texto += "\nANEXOS LIDOS OU ENVIADOS PARA A IA: " + anexosLidos + "\n";
+
+    if (texto.length < 240) {
         throw new Error("Não encontrei material suficiente no período escolhido.");
     }
 
@@ -7404,6 +7655,16 @@ function desenharSimuladaoInterativo(dados, configuracao) {
     let atual = 0;
     let pontos = 0;
 
+    function fonteDaQuestao(questao) {
+        return `
+            <div class="fonte-questao-simuladao">
+                <strong>Fonte usada</strong>
+                <p>${protegerTexto(questao.fonte || "Material da disciplina")}</p>
+                <blockquote>${protegerTexto(questao.evidencia || "")}</blockquote>
+            </div>
+        `;
+    }
+
     function desenhar() {
         const questao = questoes[atual];
         const campoResposta = discursiva
@@ -7459,6 +7720,7 @@ function desenharSimuladaoInterativo(dados, configuracao) {
                 <strong>📝 Resposta orientadora</strong>
                 <p>${protegerTexto(questao.respostaModelo || questao.explicacao || "Compare sua resposta com os materiais usados no simulado.")}</p>
                 <p>${protegerTexto(questao.explicacao || "")}</p>
+                ${fonteDaQuestao(questao)}
                 <button id="avancar-simuladao" class="botao-principal" type="button">${atual + 1 < questoes.length ? "Próxima questão" : "Concluir"}</button>
             </div>
         `;
@@ -7480,6 +7742,7 @@ function desenharSimuladaoInterativo(dados, configuracao) {
             <div class="arquivo">
                 <strong>${acertou ? "✅ Boa estratégia!" : "💡 Esta é uma oportunidade de revisão."}</strong>
                 <p>${protegerTexto(questao.explicacao || "")}</p>
+                ${fonteDaQuestao(questao)}
                 <button id="avancar-simuladao" class="botao-principal" type="button">${atual + 1 < questoes.length ? "Próxima questão" : "Ver resultado"}</button>
             </div>
         `;
