@@ -892,7 +892,7 @@ document
                     nome: perfil.nome,
                     email: perfil.email,
                     tipo: perfil.tipo,
-                    administrador: perfil.papel === "superadmin",
+                    administrador: perfil.papel === "superadmin" || usuarioEhDono(perfil),
                     bancoConectado: true
                 });
 
@@ -1056,10 +1056,9 @@ function mostrarErroLogin(mensagem) {
 function entrarNoAplicativo() {
     mostrarTela(aplicativo);
 
-    if (!usuarioAtual.bancoConectado) {
-        usuarioAtual.administrador =
-            usuarioEhDono(usuarioAtual);
-    }
+    usuarioAtual.administrador =
+        usuarioAtual.administrador === true ||
+        usuarioEhDono(usuarioAtual);
 
     salvarUsuarioLocal(usuarioAtual);
     desenharHistoricoPesquisas();
