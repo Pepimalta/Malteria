@@ -2721,10 +2721,9 @@ body.intro-ativa {
 
 .barra-lateral-marca:hover,
 .barra-lateral-marca:focus-visible {
-    transform: translateY(-2px) scale(1.08) rotate(-4deg);
-    box-shadow: 0 10px 24px rgba(92, 65, 220, 0.34);
-    outline: 3px solid rgba(255, 255, 255, 0.8);
-    outline-offset: 3px;
+    .assinatura-malteria small {
+    color: var(--cinza);
+    font-style: italic;
 }
 
 /* FORMATOS DA PESQUISA INTELIGENTE */
