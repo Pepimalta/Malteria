@@ -5900,54 +5900,72 @@ body {
     color: #536178;
 }
 
-/* Ajustes visuais da barra lateral: marca compacta e rolagem das abas */
+/* Ajustes visuais da barra lateral: marca compacta e rolagem discreta */
 .barra-lateral {
+    padding-right: 13px;
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: thin;
-    scrollbar-color: rgba(104, 72, 245, 0.72) rgba(237, 232, 255, 0.86);
+    scrollbar-color: rgba(118, 85, 255, 0.38) transparent;
+}
+
+.barra-lateral:hover,
+.barra-lateral:focus-within {
+    width: 292px;
 }
 
 .barra-lateral::-webkit-scrollbar {
-    width: 11px;
+    width: 6px;
 }
 
 .barra-lateral::-webkit-scrollbar-track {
     border-radius: 999px;
-    background: linear-gradient(180deg, #f6f1ff, #e7f7ff);
+    background: transparent;
 }
 
 .barra-lateral::-webkit-scrollbar-thumb {
-    min-height: 72px;
-    border: 2px solid rgba(246, 241, 255, 0.95);
+    min-height: 58px;
     border-radius: 999px;
-    background: linear-gradient(180deg, #7a4cff, #34c4df);
+    background: rgba(118, 85, 255, 0.34);
+}
+
+.barra-lateral:hover::-webkit-scrollbar-thumb,
+.barra-lateral:focus-within::-webkit-scrollbar-thumb {
+    background: rgba(118, 85, 255, 0.52);
 }
 
 .barra-lateral::-webkit-scrollbar-button:single-button {
-    height: 14px;
-    background-color: transparent;
+    width: 0;
+    height: 0;
+    display: none;
 }
 
 .barra-lateral-marca {
-    width: 54px;
-    min-width: 54px;
-    height: 30px;
-    min-height: 30px;
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    min-height: 48px;
     border: 0;
-    border-radius: 999px;
-    background: linear-gradient(100deg, #7655ff 0%, #5d72ff 48%, #38c4d7 100%);
-    box-shadow: 0 8px 18px rgba(91, 83, 230, 0.22);
-    font-size: 20px;
+    border-radius: 17px;
+    background: linear-gradient(145deg, #833df2 0%, #6848f5 48%, #2eaee8 100%);
+    box-shadow: 0 10px 22px rgba(104, 72, 245, 0.24);
+    font-size: 25px;
     font-style: italic;
+    font-weight: 900;
     line-height: 1;
     letter-spacing: 0;
+    transform: rotate(2deg);
 }
 
 .barra-lateral:hover .barra-lateral-marca,
 .barra-lateral:focus-within .barra-lateral-marca {
-    width: 70px;
-    min-width: 70px;
+    width: 48px;
+    min-width: 48px;
+}
+
+.barra-lateral .ferramenta-lateral {
+    width: 264px;
+    gap: 16px;
 }
 
 @media (max-width: 600px) {
