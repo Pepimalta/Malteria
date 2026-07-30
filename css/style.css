@@ -5899,3 +5899,65 @@ body {
     border-left: 3px solid #38c98c;
     color: #536178;
 }
+
+/* Ajustes visuais da barra lateral: marca compacta e rolagem das abas */
+.barra-lateral {
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(104, 72, 245, 0.72) rgba(237, 232, 255, 0.86);
+}
+
+.barra-lateral::-webkit-scrollbar {
+    width: 11px;
+}
+
+.barra-lateral::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: linear-gradient(180deg, #f6f1ff, #e7f7ff);
+}
+
+.barra-lateral::-webkit-scrollbar-thumb {
+    min-height: 72px;
+    border: 2px solid rgba(246, 241, 255, 0.95);
+    border-radius: 999px;
+    background: linear-gradient(180deg, #7a4cff, #34c4df);
+}
+
+.barra-lateral::-webkit-scrollbar-button:single-button {
+    height: 14px;
+    background-color: transparent;
+}
+
+.barra-lateral-marca {
+    width: 54px;
+    min-width: 54px;
+    height: 30px;
+    min-height: 30px;
+    border: 0;
+    border-radius: 999px;
+    background: linear-gradient(100deg, #7655ff 0%, #5d72ff 48%, #38c4d7 100%);
+    box-shadow: 0 8px 18px rgba(91, 83, 230, 0.22);
+    font-size: 20px;
+    font-style: italic;
+    line-height: 1;
+    letter-spacing: 0;
+}
+
+.barra-lateral:hover .barra-lateral-marca,
+.barra-lateral:focus-within .barra-lateral-marca {
+    width: 70px;
+    min-width: 70px;
+}
+
+@media (max-width: 600px) {
+    .barra-lateral {
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+    }
+
+    .barra-lateral::-webkit-scrollbar {
+        display: none;
+    }
+}
