@@ -480,6 +480,23 @@
             </button>
 
             <div class="acoes-cabecalho">
+                <div
+                    id="seletor-modulo-dono"
+                    class="seletor-modulo-dono escondido"
+                    role="group"
+                    aria-label="Escolher módulo da Maltéria"
+                >
+                    <small>VISUALIZAR COMO</small>
+                    <div class="seletor-modulo-botoes">
+                        <button type="button" data-modulo-dono="aluno" aria-pressed="true">
+                            🎓 Aluno
+                        </button>
+                        <button type="button" data-modulo-dono="responsavel" aria-pressed="false">
+                            👨‍👩‍👧 Responsável
+                        </button>
+                    </div>
+                </div>
+
                 <div id="cartao-classroom" class="classroom-canto">
                     <button id="conectar-classroom" type="button">
                         <span class="classroom-icone" aria-hidden="true">🎓</span>
@@ -516,12 +533,12 @@
                 <span class="ferramenta-texto">Agenda</span>
             </button>
 
-            <button id="abrir-materias-lateral" class="ferramenta-lateral" type="button">
+            <button id="abrir-materias-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="aluno">
                 <span class="ferramenta-icone">📚</span>
                 <span class="ferramenta-texto">Matérias</span>
             </button>
 
-            <button id="abrir-redacoes-lateral" class="ferramenta-lateral" type="button">
+            <button id="abrir-redacoes-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="aluno">
                 <span class="ferramenta-icone">✍️</span>
                 <span class="ferramenta-texto">Redações</span>
             </button>
@@ -529,6 +546,16 @@
             <button id="abrir-trabalhos-lateral" class="ferramenta-lateral" type="button">
                 <span class="ferramenta-icone">🗂️</span>
                 <span class="ferramenta-texto">Trabalhos escolares</span>
+            </button>
+
+            <button id="abrir-correcao-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="aluno">
+                <span class="ferramenta-icone">✅</span>
+                <span class="ferramenta-texto">Correção</span>
+            </button>
+
+            <button id="abrir-gabaritos-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="responsavel">
+                <span class="ferramenta-icone">📋</span>
+                <span class="ferramenta-texto">Gabaritos</span>
             </button>
 
             <button id="abrir-pesquisa" class="ferramenta-lateral" type="button">
@@ -541,17 +568,12 @@
                 <div id="lista-historico-pesquisas" class="lista-historico-pesquisas"></div>
             </section>
 
-            <button id="abrir-ajuda" class="ferramenta-lateral" type="button">
-                <span class="ferramenta-icone">?</span>
-                <span class="ferramenta-texto">Ajuda</span>
-            </button>
-
             <button id="abrir-nivel-melhora" class="ferramenta-lateral" type="button">
                 <span class="ferramenta-icone">↗</span>
                 <span class="ferramenta-texto">Meta e evolução</span>
             </button>
 
-            <button id="abrir-pratica" class="ferramenta-lateral" type="button">
+            <button id="abrir-pratica" class="ferramenta-lateral" type="button" data-perfil-visivel="aluno">
                 <span class="ferramenta-icone">◎</span>
                 <span class="ferramenta-texto">Simulados</span>
             </button>
@@ -559,6 +581,11 @@
             <button id="abrir-administracao" class="ferramenta-lateral escondido" type="button">
                 <span class="ferramenta-icone">♛</span>
                 <span class="ferramenta-texto">Super administração</span>
+            </button>
+
+            <button id="abrir-ajuda" class="ferramenta-lateral" type="button">
+                <span class="ferramenta-icone">?</span>
+                <span class="ferramenta-texto">Ajuda</span>
             </button>
         </aside>
 
@@ -584,11 +611,13 @@
 
                 <section class="atalhos-inicio" aria-label="Atalhos principais">
                     <button type="button" data-atalho-pagina="agenda"><span>📅</span><strong>Agenda</strong><small>Veja deveres, entregas e o que preparar.</small></button>
-                    <button type="button" data-atalho-pagina="materias"><span>📚</span><strong>Matérias</strong><small>Abra suas turmas, materiais e atividades.</small></button>
-                    <button type="button" data-atalho-pagina="redacoes"><span>✍️</span><strong>Redações</strong><small>Receba uma proposta e envie seu texto para correção.</small></button>
+                    <button type="button" data-atalho-pagina="materias" data-perfil-visivel="aluno"><span>📚</span><strong>Matérias</strong><small>Abra suas turmas, materiais e atividades.</small></button>
+                    <button type="button" data-atalho-pagina="redacoes" data-perfil-visivel="aluno"><span>✍️</span><strong>Redações</strong><small>Receba uma proposta e envie seu texto para correção.</small></button>
                     <button type="button" data-atalho-pagina="trabalhos"><span>🗂️</span><strong>Trabalhos escolares</strong><small>Veja os trabalhos do bimestre e o que fazer em cada um.</small></button>
                     <button type="button" data-atalho-pagina="meta"><span>↗️</span><strong>Meta e evolução</strong><small>Acompanhe sua meta sem transformar o estudo em pressão.</small></button>
-                    <button type="button" data-atalho-pagina="simulados"><span>🎯</span><strong>Simulados</strong><small>Escolha matérias, período, formato e quantidade.</small></button>
+                    <button type="button" data-atalho-pagina="simulados" data-perfil-visivel="aluno"><span>🎯</span><strong>Simulados</strong><small>Escolha matérias, período, formato e quantidade.</small></button>
+                    <button type="button" data-atalho-pagina="correcao" data-perfil-visivel="aluno"><span>✅</span><strong>Correção</strong><small>Envie seu dever e descubra o que acertou e o que precisa revisar.</small></button>
+                    <button type="button" data-atalho-pagina="gabaritos" data-perfil-visivel="responsavel"><span>📋</span><strong>Gabaritos</strong><small>Acompanhe os simulados que seus filhos já concluíram.</small></button>
                     <button type="button" data-atalho-pagina="pesquisa"><span>🔎</span><strong>Nova pesquisa</strong><small>Tire uma dúvida usando os materiais do Classroom.</small></button>
                     <button type="button" data-atalho-pagina="ajuda"><span>❓</span><strong>Ajuda</strong><small>Aprenda como cada parte da Maltéria funciona.</small></button>
                 </section>
@@ -666,10 +695,7 @@
                             <h2 id="titulo-atividades-data">Para amanhã</h2>
                         </div>
 
-                        <label class="seletor-prazo" for="data-atividades">
-                            Escolher dia
-                            <input id="data-atividades" type="date">
-                        </label>
+                        <input id="data-atividades" type="hidden">
                     </div>
 
                     <div id="atividades-amanha">
@@ -680,6 +706,51 @@
                     </div>
                 </section>
 
+            </section>
+
+            <!-- PÁGINA DE CORREÇÃO DE DEVERES (ALUNO) -->
+            <section id="pagina-correcao" class="pagina-ferramenta pagina-correcao escondido" data-perfil-visivel="aluno">
+                <button id="fechar-correcao" class="botao-link voltar-ferramenta" type="button">← Voltar</button>
+                <div class="cabecalho-ferramenta cabecalho-correcao">
+                    <span>✅</span>
+                    <div>
+                        <small>CONFIRA O QUE VOCÊ FEZ</small>
+                        <h1>Correção de deveres</h1>
+                        <p>Envie fotos ou um PDF do dever. A Maltéria mostra acertos, pontos para revisar e explica cada correção.</p>
+                    </div>
+                </div>
+                <section class="caixa formulario-correcao-dever">
+                    <label for="materia-correcao-dever">Matéria</label>
+                    <select id="materia-correcao-dever">
+                        <option value="">Conecte o Classroom para escolher a matéria</option>
+                    </select>
+                    <label for="arquivos-correcao-dever">Fotos ou PDF do dever</label>
+                    <input id="arquivos-correcao-dever" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf">
+                    <label for="observacao-correcao-dever">O que você quer que a Maltéria confira? <small>(opcional)</small></label>
+                    <textarea id="observacao-correcao-dever" rows="4" placeholder="Exemplo: confira os exercícios 1 a 8 e explique onde eu errei."></textarea>
+                    <button id="corrigir-dever" class="botao-principal" type="button">✨ Corrigir meu dever</button>
+                    <p id="status-correcao-dever" class="status-pesquisa" aria-live="polite"></p>
+                    <section id="resultado-correcao-dever" class="resultado-correcao-dever escondido"></section>
+                </section>
+            </section>
+
+            <!-- PÁGINA DE GABARITOS (RESPONSÁVEL) -->
+            <section id="pagina-gabaritos" class="pagina-ferramenta pagina-gabaritos escondido" data-perfil-visivel="responsavel">
+                <button id="fechar-gabaritos" class="botao-link voltar-ferramenta" type="button">← Voltar</button>
+                <div class="cabecalho-ferramenta cabecalho-gabaritos">
+                    <span>📋</span>
+                    <div>
+                        <small>ACOMPANHAMENTO DO RESPONSÁVEL</small>
+                        <h1>Gabaritos dos simulados</h1>
+                        <p>Veja as respostas, os acertos e os pontos que cada filho precisa revisar.</p>
+                    </div>
+                </div>
+                <section class="caixa painel-gabaritos">
+                    <label for="filho-gabaritos">Aluno</label>
+                    <select id="filho-gabaritos"></select>
+                    <div id="resumo-gabaritos" class="resumo-gabaritos"></div>
+                    <div id="lista-gabaritos" class="lista-gabaritos"></div>
+                </section>
             </section>
 
             <!-- PÁGINA DE MATÉRIAS -->
