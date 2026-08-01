@@ -118,6 +118,12 @@ const paginaNivelMelhora =
 const paginaPratica =
     document.querySelector("#pagina-pratica");
 
+const paginaCorrecao =
+    document.querySelector("#pagina-correcao");
+
+const paginaGabaritos =
+    document.querySelector("#pagina-gabaritos");
+
 const paginaAdministracao =
     document.querySelector("#pagina-administracao");
 
@@ -209,6 +215,68 @@ function usuarioEhDono(usuario) {
             EMAIL_DONO_MALTERIA
     );
 }
+
+const CHAVE_MODULO_DONO = "malteriaModuloDono";
+let moduloDonoAtual = "aluno";
+
+function perfilVisualAtual() {
+    if (usuarioEhDono(usuarioAtual)) {
+        return moduloDonoAtual;
+    }
+
+    return usuarioAtual?.tipo === "Responsável"
+        ? "responsavel"
+        : "aluno";
+}
+
+function atualizarSeletorModuloDono() {
+    const seletor = document.querySelector("#seletor-modulo-dono");
+    if (!seletor) return;
+
+    const podeAlternar = usuarioEhDono(usuarioAtual);
+    seletor.classList.toggle("escondido", !podeAlternar);
+
+    seletor.querySelectorAll("[data-modulo-dono]").forEach(function (botao) {
+        const ativo = botao.dataset.moduloDono === moduloDonoAtual;
+        botao.classList.toggle("ativo", ativo);
+        botao.setAttribute("aria-pressed", String(ativo));
+    });
+}
+
+function atualizarDescricaoDaConta() {
+    const contaTipo = document.querySelector("#conta-tipo");
+    if (!contaTipo || !usuarioAtual) return;
+
+    contaTipo.textContent = usuarioEhDono(usuarioAtual)
+        ? "Superadministrador • módulo " +
+            (perfilVisualAtual() === "responsavel" ? "Responsável" : "Aluno")
+        : usuarioAtual.tipo;
+}
+
+function trocarModuloDono(novoModulo) {
+    if (!usuarioEhDono(usuarioAtual)) return;
+    if (novoModulo !== "aluno" && novoModulo !== "responsavel") return;
+
+    moduloDonoAtual = novoModulo;
+    sessionStorage.setItem(CHAVE_MODULO_DONO, moduloDonoAtual);
+    atualizarSeletorModuloDono();
+    atualizarDescricaoDaConta();
+    aplicarVisibilidadePorPerfil();
+
+    if (perfilVisualAtual() === "responsavel") {
+        prepararPainelResponsavel();
+    } else {
+        prepararPainelAluno();
+    }
+
+    mostrarPaginaPrincipal();
+}
+
+document.querySelectorAll("[data-modulo-dono]").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+        trocarModuloDono(botao.dataset.moduloDono);
+    });
+});
 
 function lerUsuariosLocais() {
     let usuarios = [];
@@ -430,6 +498,8 @@ const paginasInternas = [
     paginaAjuda,
     paginaNivelMelhora,
     paginaPratica,
+    paginaCorrecao,
+    paginaGabaritos,
     paginaAdministracao
 ];
 
@@ -892,7 +962,7 @@ document
                     nome: perfil.nome,
                     email: perfil.email,
                     tipo: perfil.tipo,
-                    administrador: perfil.papel === "superadmin" || usuarioEhDono(perfil),
+                    administrador: perfil.papel === "superadmin",
                     bancoConectado: true
                 });
 
@@ -1056,12 +1126,22 @@ function mostrarErroLogin(mensagem) {
 function entrarNoAplicativo() {
     mostrarTela(aplicativo);
 
-    usuarioAtual.administrador =
-        usuarioAtual.administrador === true ||
-        usuarioEhDono(usuarioAtual);
+    if (!usuarioAtual.bancoConectado) {
+        usuarioAtual.administrador =
+            usuarioEhDono(usuarioAtual);
+    }
 
     salvarUsuarioLocal(usuarioAtual);
     desenharHistoricoPesquisas();
+
+    if (usuarioEhDono(usuarioAtual)) {
+        const moduloSalvo = sessionStorage.getItem(CHAVE_MODULO_DONO);
+        moduloDonoAtual = moduloSalvo === "responsavel"
+            ? "responsavel"
+            : "aluno";
+    }
+
+    atualizarSeletorModuloDono();
 
     document.querySelector(
         "#saudacao"
@@ -1078,12 +1158,7 @@ function entrarNoAplicativo() {
     ).textContent =
         usuarioAtual.email;
 
-    document.querySelector(
-        "#conta-tipo"
-    ).textContent =
-        usuarioAtual.administrador
-            ? "Administrador da Maltéria"
-            : usuarioAtual.tipo;
+    atualizarDescricaoDaConta();
 
     document.querySelector(
         "#abrir-administracao"
@@ -1103,7 +1178,9 @@ function entrarNoAplicativo() {
             ? "Código: " + codigo
             : "";
 
-    if (usuarioAtual.tipo === "Responsável") {
+    aplicarVisibilidadePorPerfil();
+
+    if (perfilVisualAtual() === "responsavel") {
         prepararPainelResponsavel();
     } else {
         prepararPainelAluno();
@@ -1111,6 +1188,14 @@ function entrarNoAplicativo() {
 
     mostrarPaginaPrincipal();
     restaurarConexaoClassroom();
+}
+
+function aplicarVisibilidadePorPerfil() {
+    const perfil = perfilVisualAtual();
+
+    document.querySelectorAll("[data-perfil-visivel]").forEach(function (elemento) {
+        elemento.hidden = elemento.dataset.perfilVisivel !== perfil;
+    });
 }
 
 function prepararPainelAluno() {
@@ -1126,6 +1211,8 @@ function prepararPainelAluno() {
     document.querySelector(
         "#painel-responsavel-resumo"
     ).classList.add("escondido");
+
+    preencherMateriasCorrecao();
 }
 
 function prepararPainelResponsavel() {
@@ -1144,6 +1231,7 @@ function prepararPainelResponsavel() {
 
     atualizarListaDeFilhos();
     prepararRelatorioResponsavel();
+    preencherSeletorGabaritos();
 }
 
 /* VÁRIOS FILHOS */
@@ -1522,6 +1610,17 @@ function mostrarPaginaRedacoes() {
     mostrarPaginaInterna(paginaRedacoes);
 }
 
+function mostrarPaginaCorrecao() {
+    preencherMateriasCorrecao();
+    mostrarPaginaInterna(paginaCorrecao);
+}
+
+function mostrarPaginaGabaritos() {
+    preencherSeletorGabaritos();
+    desenharGabaritosDoAluno();
+    mostrarPaginaInterna(paginaGabaritos);
+}
+
 document
     .querySelector("#inicio")
     .addEventListener(
@@ -1552,6 +1651,14 @@ document
     .querySelector("#abrir-redacoes-lateral")
     .addEventListener("click", mostrarPaginaRedacoes);
 
+document
+    .querySelector("#abrir-correcao-lateral")
+    .addEventListener("click", mostrarPaginaCorrecao);
+
+document
+    .querySelector("#abrir-gabaritos-lateral")
+    .addEventListener("click", mostrarPaginaGabaritos);
+
 document.querySelectorAll("[data-atalho-pagina]").forEach(function (botao) {
     botao.addEventListener("click", function () {
         const destino = botao.dataset.atalhoPagina;
@@ -1559,6 +1666,8 @@ document.querySelectorAll("[data-atalho-pagina]").forEach(function (botao) {
         if (destino === "materias") mostrarPaginaMaterias();
         if (destino === "redacoes") mostrarPaginaRedacoes();
         if (destino === "trabalhos") mostrarPaginaTrabalhos();
+        if (destino === "correcao") mostrarPaginaCorrecao();
+        if (destino === "gabaritos") mostrarPaginaGabaritos();
         if (destino === "pesquisa") abrirNovaPesquisa();
         if (destino === "meta") document.querySelector("#abrir-nivel-melhora").click();
         if (destino === "simulados") document.querySelector("#abrir-pratica").click();
@@ -3378,6 +3487,29 @@ function preencherMateriasRedacao() {
     }
 }
 
+function preencherMateriasCorrecao() {
+    const seletor = document.querySelector("#materia-correcao-dever");
+    if (!seletor) return;
+
+    const valorAnterior = seletor.value;
+    const materias = Array.isArray(turmasClassroom) ? turmasClassroom : [];
+
+    if (!materias.length) {
+        seletor.innerHTML = '<option value="">Conecte o Classroom para escolher a matéria</option>';
+        return;
+    }
+
+    seletor.innerHTML = '<option value="">Escolha uma matéria</option>' +
+        materias.map(function (turma) {
+            return '<option value="' + protegerTexto(String(turma.id)) + '">' +
+                protegerTexto(turma.name) + '</option>';
+        }).join("");
+
+    if (materias.some(function (turma) { return String(turma.id) === valorAnterior; })) {
+        seletor.value = valorAnterior;
+    }
+}
+
 function periodoDaPropostaRedacao() {
     const modo = document.querySelector("#modo-periodo-redacao").value;
     const hoje = new Date();
@@ -3571,6 +3703,87 @@ async function corrigirRedacao() {
 }
 
 document.querySelector("#corrigir-redacao").addEventListener("click", corrigirRedacao);
+
+async function corrigirDeverDoAluno() {
+    const seletor = document.querySelector("#materia-correcao-dever");
+    const arquivosSelecionados = Array.from(
+        document.querySelector("#arquivos-correcao-dever").files || []
+    ).slice(0, 6);
+    const observacao = document.querySelector("#observacao-correcao-dever").value.trim();
+    const status = document.querySelector("#status-correcao-dever");
+    const area = document.querySelector("#resultado-correcao-dever");
+    const botao = document.querySelector("#corrigir-dever");
+    const turma = turmasClassroom.find(function (item) {
+        return String(item.id) === String(seletor.value);
+    });
+
+    if (!turma) {
+        status.textContent = "Escolha a matéria do dever.";
+        return;
+    }
+
+    if (!arquivosSelecionados.length) {
+        status.textContent = "Envie pelo menos uma foto ou um PDF do dever.";
+        return;
+    }
+
+    botao.disabled = true;
+    area.classList.add("escondido");
+    status.textContent = "Lendo o dever e conferindo cada resposta...";
+
+    try {
+        const arquivos = [];
+        for (const arquivo of arquivosSelecionados) {
+            arquivos.push(await prepararArquivoEvolucao(arquivo, "dever-de-casa"));
+        }
+
+        const resposta = await fetch(ENDERECO_IA, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                tipo: "pesquisa",
+                materia: turma.name,
+                formato: "texto",
+                semData: true,
+                pergunta: [
+                    "Atue como uma professora cuidadosa corrigindo um dever de casa enviado por uma criança.",
+                    "Leia somente o que estiver visível nos arquivos. Não invente enunciados, respostas nem gabaritos.",
+                    "Analise exercício por exercício e organize em: número ou identificação; resposta encontrada; resultado (certo, precisa revisar ou não foi possível ler); explicação; como corrigir.",
+                    "Quando não houver informação suficiente para confirmar uma resposta, diga claramente que é preciso conferir com o enunciado ou material da escola.",
+                    "Não entregue apenas a resposta final: explique o raciocínio em linguagem adequada à criança.",
+                    "Ao final, apresente: total identificado, acertos confirmados, itens para revisar e próximos passos.",
+                    observacao ? "Pedido do aluno: " + observacao : "Confira todo o dever enviado."
+                ].join(" "),
+                conteudo: "Dever de casa enviado para correção na matéria " + turma.name + ".",
+                arquivos: arquivos
+            })
+        });
+        const dados = await resposta.json();
+        if (!resposta.ok) {
+            throw new Error(dados.erro || "Não foi possível corrigir o dever.");
+        }
+
+        area.innerHTML = `
+            <div class="topo-correcao-dever">
+                <span>✅</span>
+                <div><small>CORREÇÃO DA MALTÉRIA</small><h2>${protegerTexto(turma.name)}</h2></div>
+            </div>
+            <div class="texto-correcao-dever">${formatarTexto(dados.resposta || "A correção não foi retornada.")}</div>
+            <p class="aviso-correcao-dever">Confira orientações importantes com o professor ou com seu responsável.</p>
+        `;
+        area.classList.remove("escondido");
+        status.textContent = "Correção concluída. Revise os itens indicados antes de entregar.";
+    } catch (erro) {
+        console.error(erro);
+        status.textContent = traduzirErroDaInteligencia(erro.message);
+    } finally {
+        botao.disabled = false;
+    }
+}
+
+document.querySelector("#corrigir-dever").addEventListener("click", corrigirDeverDoAluno);
+document.querySelector("#fechar-correcao").addEventListener("click", mostrarPaginaPrincipal);
+document.querySelector("#fechar-gabaritos").addEventListener("click", mostrarPaginaPrincipal);
 
 function chaveHistoricoPesquisas() {
     const conta = usuarioAtual?.email
@@ -4798,6 +5011,7 @@ function desenharTurmasClassroom(turmas) {
 
     desenharMaterias(materiasReais);
     preencherMateriasRedacao();
+    preencherMateriasCorrecao();
 
     if (usuarioAtual?.email) {
         try {
@@ -5050,12 +5264,8 @@ async function confirmarIdentidadeGoogle() {
             !usuarioAtual.administrador
         );
 
-        document.querySelector(
-            "#conta-tipo"
-        ).textContent =
-            usuarioAtual.administrador
-                ? "Administrador da Maltéria"
-                : usuarioAtual.tipo;
+        atualizarDescricaoDaConta();
+        atualizarSeletorModuloDono();
 
         if (
             emailDaConta === EMAIL_DONO_MALTERIA &&
@@ -5191,15 +5401,18 @@ function proximoDiaLetivo(data) {
     return proximo;
 }
 
-async function carregarRelatorioResponsavel() {
+async function carregarRelatorioResponsavel(configuracao = {}) {
+    if (configuracao instanceof Event) configuracao = {};
     prepararRelatorioResponsavel();
 
-    const status = document.querySelector("#status-relatorio-responsavel");
-    const area = document.querySelector("#resultado-relatorio-responsavel");
-    const botao = document.querySelector("#atualizar-relatorio-responsavel");
-    const dataAlvo = dataRelatorioResponsavel.value;
-    const dataReferencia = dataReferenciaRelatorioResponsavel.value;
-    const horizonte = document.querySelector("#horizonte-relatorio-responsavel").value;
+    const status = configuracao.statusElement || document.querySelector("#status-relatorio-responsavel");
+    const area = configuracao.areaElement || document.querySelector("#resultado-relatorio-responsavel");
+    const botao = configuracao.buttonElement === null
+        ? null
+        : document.querySelector("#atualizar-relatorio-responsavel");
+    const dataAlvo = configuracao.dataAlvo || dataRelatorioResponsavel.value;
+    const dataReferencia = configuracao.dataReferencia || dataReferenciaRelatorioResponsavel.value;
+    const horizonte = configuracao.horizonte || document.querySelector("#horizonte-relatorio-responsavel").value;
     const dias = Number(horizonte) || 14;
 
     if (!tokenClassroom) {
@@ -5220,8 +5433,10 @@ async function carregarRelatorioResponsavel() {
     const dataInicio = dataParaCampo(inicio);
     const dataFimConsulta = dataAlvo;
 
-    botao.disabled = true;
-    botao.textContent = "Atualizando...";
+    if (botao) {
+        botao.disabled = true;
+        botao.textContent = "Atualizando...";
+    }
     status.textContent = "Relendo avisos antigos da Agenda e procurando o horário de aulas...";
     area.classList.add("escondido");
     arquivosPdfParaIA = [];
@@ -5315,18 +5530,70 @@ async function carregarRelatorioResponsavel() {
             dados,
             dataAlvo,
             dataInicio,
-            dataReferencia
+            dataReferencia,
+            area
         );
-        status.textContent =
+        let mensagemAtualizacao =
             "Relatório atualizado às " +
             new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) +
             ".";
+        if (configuracao.enviarEmail === true) {
+            const resultadoEmail = await enviarEmailDeveresAmanha(dados, dataAlvo);
+            if (resultadoEmail.enviado) {
+                mensagemAtualizacao += " O resumo também foi enviado ao e-mail do responsável.";
+            } else if (resultadoEmail.motivo === "ja-enviado") {
+                mensagemAtualizacao += " Este mesmo resumo já havia sido enviado por e-mail.";
+            } else if (resultadoEmail.motivo === "sem-entregas") {
+                mensagemAtualizacao += " Nenhum e-mail foi enviado porque não há entregas confirmadas.";
+            } else if (resultadoEmail.erro) {
+                mensagemAtualizacao += " Relatório pronto; e-mail pendente: " + resultadoEmail.erro;
+            }
+        }
+        status.textContent = mensagemAtualizacao;
     } catch (erro) {
         console.error(erro);
         status.textContent = traduzirErroDaInteligencia(erro.message);
+        if (configuracao.areaElement) {
+            area.innerHTML = '<p class="erro">' +
+                protegerTexto(traduzirErroDaInteligencia(erro.message)) +
+                '</p>';
+            area.classList.remove("escondido");
+        }
     } finally {
-        botao.disabled = false;
-        botao.textContent = "↻ Atualizar relatório";
+        if (botao) {
+            botao.disabled = false;
+            botao.textContent = "↻ Atualizar relatório";
+        }
+    }
+}
+
+async function enviarEmailDeveresAmanha(dados, dataAlvo) {
+    if (usuarioAtual?.tipo !== "Responsável") return { enviado: false };
+    if (!window.MalteriaBanco?.configurado) {
+        return { enviado: false, erro: "banco de dados não configurado" };
+    }
+    try {
+        const token = await window.MalteriaBanco.tokenAcesso();
+        if (!token) return { enviado: false, erro: "entre novamente na conta" };
+        const resposta = await fetch("/api/lembrete-amanha", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + token
+            },
+            body: JSON.stringify({
+                dataAlvo: dataAlvo,
+                entregas: Array.isArray(dados?.entregas) ? dados.entregas : []
+            })
+        });
+        const resultado = await resposta.json().catch(function () { return {}; });
+        if (!resposta.ok) {
+            return { enviado: false, erro: resultado.erro || "falha no serviço de e-mail" };
+        }
+        return resultado;
+    } catch (erro) {
+        console.error("E-mail do relatório:", erro);
+        return { enviado: false, erro: erro.message || "falha no envio" };
     }
 }
 
@@ -5640,9 +5907,10 @@ function desenharRelatorioResponsavel(
     dados,
     dataAlvo,
     dataInicio,
-    dataReferencia
+    dataReferencia,
+    areaDestino
 ) {
-    const area = document.querySelector("#resultado-relatorio-responsavel");
+    const area = areaDestino || document.querySelector("#resultado-relatorio-responsavel");
     const entregas = Array.isArray(dados.entregas) ? dados.entregas : [];
     const avisos = Array.isArray(dados.avisos) ? dados.avisos : [];
     const horario = Array.isArray(dados.horarioSemanal) ? dados.horarioSemanal : [];
@@ -5739,11 +6007,7 @@ const tituloAtividadesData =
 function prepararDataInicialAtividades() {
     const amanha = new Date();
     amanha.setDate(amanha.getDate() + 1);
-
-    if (!campoDataAtividades.value) {
-        campoDataAtividades.value =
-            dataParaCampo(amanha);
-    }
+    campoDataAtividades.value = dataParaCampo(amanha);
 }
 
 async function carregarAtividadesDaData() {
@@ -5753,11 +6017,21 @@ async function carregarAtividadesDaData() {
         campoDataAtividades.value + "T12:00:00"
     );
 
-    tituloAtividadesData.textContent =
-        dataParaCampo(dataEscolhida) ===
-        dataParaCampo(new Date(Date.now() + 86400000))
-            ? "Para amanhã"
-            : "Para " + dataEscolhida.toLocaleDateString("pt-BR");
+    tituloAtividadesData.textContent = "Para amanhã";
+
+    if (usuarioAtual?.tipo === "Responsável") {
+        const statusAutomatico = { textContent: "" };
+        await carregarRelatorioResponsavel({
+            dataAlvo: campoDataAtividades.value,
+            dataReferencia: dataParaCampo(new Date()),
+            horizonte: 21,
+            statusElement: statusAutomatico,
+            areaElement: document.querySelector("#atividades-amanha"),
+            buttonElement: null,
+            enviarEmail: true
+        });
+        return;
+    }
 
     document.querySelector("#atividades-amanha").innerHTML =
         "<p>Consultando a Agenda Google...</p>";
@@ -7184,21 +7458,147 @@ function registrarPraticaLocal(registro) {
         praticas = [];
     }
 
-    praticas.push({
+    const registroCompleto = {
         ...registro,
         id: typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
             ? crypto.randomUUID()
             : String(Date.now()) + Math.random(),
         data: new Date().toISOString()
-    });
+    };
+
+    praticas.push(registroCompleto);
 
     localStorage.setItem(
         chave,
         JSON.stringify(praticas.slice(-500))
     );
 
+    const emailEscolar = obterEmailGoogleConectado();
+    const emailDaConta = normalizarEmail(usuarioAtual?.email || "");
+    if (emailEscolar && emailEscolar !== emailDaConta) {
+        const chaveEscolar = "malteria:praticas:" + emailEscolar;
+        let praticasEscolares = [];
+        try {
+            praticasEscolares = JSON.parse(localStorage.getItem(chaveEscolar) || "[]");
+            if (!Array.isArray(praticasEscolares)) praticasEscolares = [];
+        } catch (erro) {
+            praticasEscolares = [];
+        }
+        praticasEscolares.push(registroCompleto);
+        localStorage.setItem(chaveEscolar, JSON.stringify(praticasEscolares.slice(-500)));
+    }
+
     desenharEstatisticasPratica();
 }
+
+function praticasDoAlunoPorEmail(email) {
+    if (!email) return [];
+
+    try {
+        const dados = JSON.parse(
+            localStorage.getItem(
+                "malteria:praticas:" + normalizarEmail(email)
+            ) || "[]"
+        );
+        return Array.isArray(dados) ? dados : [];
+    } catch (erro) {
+        return [];
+    }
+}
+
+function preencherSeletorGabaritos() {
+    const seletor = document.querySelector("#filho-gabaritos");
+    if (!seletor || !usuarioAtual) return;
+
+    const filhos = Array.isArray(usuarioAtual.filhos) ? usuarioAtual.filhos : [];
+    const valorAnterior = seletor.value;
+
+    seletor.innerHTML = filhos.length
+        ? filhos.map(function (filho, indice) {
+            return '<option value="' + indice + '">' +
+                protegerTexto(filho.nome || filho.email || "Aluno") +
+                '</option>';
+        }).join("")
+        : '<option value="">Nenhum aluno vinculado</option>';
+
+    if (valorAnterior && filhos[Number(valorAnterior)]) {
+        seletor.value = valorAnterior;
+    }
+}
+
+function desenharGabaritosDoAluno() {
+    const seletor = document.querySelector("#filho-gabaritos");
+    const area = document.querySelector("#lista-gabaritos");
+    const resumo = document.querySelector("#resumo-gabaritos");
+    if (!seletor || !area || !resumo || !usuarioAtual) return;
+
+    const filhos = Array.isArray(usuarioAtual.filhos) ? usuarioAtual.filhos : [];
+    const filho = filhos[Number(seletor.value)];
+
+    if (!filho?.email) {
+        resumo.innerHTML = "";
+        area.innerHTML = "<p>Vincule a conta do aluno para acompanhar os simulados.</p>";
+        return;
+    }
+
+    const simulados = praticasDoAlunoPorEmail(filho.email)
+        .filter(function (item) {
+            return item.tipo === "simulado" || item.tipo === "simuladao";
+        })
+        .sort(function (a, b) { return new Date(b.data) - new Date(a.data); });
+
+    const totalQuestoes = simulados.reduce(function (total, item) {
+        return total + (Number(item.questoesConcluidas) || Number(item.total) || 0);
+    }, 0);
+    const totalAcertos = simulados.reduce(function (total, item) {
+        return total + (Number(item.acertos) || 0);
+    }, 0);
+
+    resumo.innerHTML = `
+        <article><strong>${simulados.length}</strong><span>simulados concluídos</span></article>
+        <article><strong>${totalQuestoes}</strong><span>questões respondidas</span></article>
+        <article><strong>${totalQuestoes ? Math.round(totalAcertos / totalQuestoes * 100) + "%" : "—"}</strong><span>acertos registrados</span></article>
+    `;
+
+    if (!simulados.length) {
+        area.innerHTML = "<p>Ainda não há simulados concluídos por este aluno neste aparelho.</p>";
+        return;
+    }
+
+    area.innerHTML = simulados.map(function (simulado, indice) {
+        const questoes = Array.isArray(simulado.gabarito) ? simulado.gabarito : [];
+        const data = simulado.data
+            ? new Date(simulado.data).toLocaleString("pt-BR")
+            : "Data não registrada";
+        const detalhes = questoes.length
+            ? '<ol class="questoes-gabarito">' + questoes.map(function (questao) {
+                const respostaAluno = questao.respostaAluno || "Não registrada";
+                const respostaCorreta = questao.respostaCorreta || "Resposta orientadora não registrada";
+                return `
+                    <li class="${questao.acertou === true ? "acertou" : questao.acertou === false ? "revisar" : "discursiva"}">
+                        <strong>${protegerTexto(questao.pergunta || "Questão")}</strong>
+                        <p><b>Resposta do aluno:</b> ${protegerTexto(respostaAluno)}</p>
+                        <p><b>Gabarito:</b> ${protegerTexto(respostaCorreta)}</p>
+                        ${questao.explicacao ? `<p><b>Explicação:</b> ${protegerTexto(questao.explicacao)}</p>` : ""}
+                        ${questao.fonte ? `<small>Fonte: ${protegerTexto(questao.fonte)}</small>` : ""}
+                    </li>
+                `;
+            }).join("") + "</ol>"
+            : '<p class="aviso-gabarito-legado">Este simulado foi feito antes da criação do gabarito detalhado. O resultado geral foi preservado.</p>';
+
+        return `
+            <details class="cartao-gabarito" ${indice === 0 ? "open" : ""}>
+                <summary>
+                    <span><strong>${protegerTexto(simulado.materia || "Simulado")}</strong><small>${protegerTexto(data)}</small></span>
+                    <b>${simulado.avaliavel === false ? "Discursivo" : (Number(simulado.acertos) || 0) + "/" + (Number(simulado.total) || 0)}</b>
+                </summary>
+                ${detalhes}
+            </details>
+        `;
+    }).join("");
+}
+
+document.querySelector("#filho-gabaritos").addEventListener("change", desenharGabaritosDoAluno);
 
 function obterPraticasLocais() {
     try {
@@ -7653,6 +8053,7 @@ function desenharSimuladaoInterativo(dados, configuracao) {
 
     let atual = 0;
     let pontos = 0;
+    const respostasDoSimulado = [];
 
     function fonteDaQuestao(questao) {
         return `
@@ -7712,7 +8113,19 @@ function desenharSimuladaoInterativo(dados, configuracao) {
     }
 
     function mostrarRetornoDiscursivo(questao) {
-        area.querySelector("#resposta-discursiva-simuladao").disabled = true;
+        const campoResposta = area.querySelector("#resposta-discursiva-simuladao");
+        const respostaAluno = campoResposta.value.trim();
+        respostasDoSimulado.push({
+            materia: questao.materia || configuracao.materias.join(", "),
+            pergunta: questao.pergunta || "",
+            respostaAluno: respostaAluno,
+            respostaCorreta: questao.respostaModelo || questao.explicacao || "Resposta orientadora não registrada.",
+            acertou: null,
+            explicacao: questao.explicacao || "",
+            fonte: questao.fonte || "",
+            evidencia: questao.evidencia || ""
+        });
+        campoResposta.disabled = true;
         area.querySelector("#conferir-discursiva-simuladao").disabled = true;
         area.querySelector("#retorno-simuladao").innerHTML = `
             <div class="arquivo">
@@ -7730,6 +8143,17 @@ function desenharSimuladaoInterativo(dados, configuracao) {
         const questao = questoes[atual];
         const acertou = indice === Number(questao.correta);
         if (acertou) pontos++;
+
+        respostasDoSimulado.push({
+            materia: questao.materia || configuracao.materias.join(", "),
+            pergunta: questao.pergunta || "",
+            respostaAluno: (questao.alternativas || [])[indice] || "Não registrada",
+            respostaCorreta: (questao.alternativas || [])[Number(questao.correta)] || "Não registrada",
+            acertou: acertou,
+            explicacao: questao.explicacao || "",
+            fonte: questao.fonte || "",
+            evidencia: questao.evidencia || ""
+        });
 
         area.querySelectorAll(".alternativa").forEach(function (botao, indiceBotao) {
             botao.disabled = true;
@@ -7765,6 +8189,7 @@ function desenharSimuladaoInterativo(dados, configuracao) {
                 total: discursiva ? 0 : questoes.length,
                 questoesConcluidas: questoes.length,
                 avaliavel: !discursiva,
+                gabarito: respostasDoSimulado,
                 minutos: Math.max(20, questoes.length * 2)
             });
 
