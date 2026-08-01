@@ -399,6 +399,10 @@ REGRAS DE INTERPRETAÇÃO:
 - A seção TURMAS OFICIAIS DO CLASSROOM contém os nomes confiáveis das turmas.
   Preserve exatamente a letra da turma informada ali. Nunca transforme Turma B
   em Turma F, nem invente uma turma a partir de texto mal reconhecido.
+- Quando o bloco informar "Turma principal identificada", use essa letra como
+  referência e ignore registros explicitamente destinados a outras letras.
+  A existência de calendários A, C, D, E ou F não é motivo para desistir da
+  análise da Turma B nem para declarar que a turma está indeterminada.
 - Calendários abreviados como RED 6B, MAT 6B e CIE 6B são calendários escolares
   e devem ser analisados integralmente.
 - Para cada matéria do dia, informe em materiasDoDia se há uma entrega confirmada,
@@ -418,6 +422,9 @@ REGRAS DE INTERPRETAÇÃO:
   salvo quando o texto informar mês ou ano.
 - "Próxima aula" significa o próximo dia em que aquela matéria aparece no
   horário semanal encontrado.
+- Registros escritos como "Para casa", "Dever de casa" ou "Tarefa para casa",
+  mesmo sem uma data escrita, devem ser associados à próxima aula daquela
+  matéria quando o horário semanal tiver sido fornecido.
 - "Próxima aula de Ciências", por exemplo, deve usar o próximo dia de Ciências,
   mesmo que outras matérias tenham aula antes.
 - Se não houver horário confiável, não invente a data. Coloque a dúvida em avisos.
