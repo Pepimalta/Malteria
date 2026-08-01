@@ -3075,6 +3075,16 @@ body {
     width: 280px;
 }
 
+/* Logo primeiro; Correção no módulo Aluno e Gabaritos no módulo Responsável. */
+#inicio-lateral {
+    order: -20;
+}
+
+#abrir-correcao-lateral,
+#abrir-gabaritos-lateral {
+    order: -19;
+}
+
 .barra-lateral-marca,
 .ferramenta-icone {
     display: grid;
@@ -3692,6 +3702,20 @@ body {
 
 .avisos-relatorio-responsavel h3 {
     margin: 0 0 9px;
+}
+
+.avisos-relatorio-responsavel p {
+    margin: 0;
+    color: var(--texto-claro);
+}
+
+.titulo-lista-relatorio {
+    margin: 18px 0 10px;
+}
+
+.sem-aula-prevista {
+    border-color: #43c59e;
+    background: #effff9;
 }
 
 .avisos-relatorio-responsavel ul {
