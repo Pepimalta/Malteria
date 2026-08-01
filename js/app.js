@@ -5454,6 +5454,11 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
                 return criarEntregaLocalDaAgenda(item, dataAlvo, horarioSalvo);
             })
             .filter(Boolean);
+        const avisosLocais = eventosEscolares
+            .map(function (item) {
+                return criarAvisoLocalDaAgenda(item, dataAlvo);
+            })
+            .filter(Boolean);
 
         const conteudoAgenda = eventosEscolares.map(function (item) {
             return (
@@ -5517,6 +5522,11 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
         }
 
         incorporarEntregasLocaisNoRelatorio(dados, entregasLocais);
+        normalizarRelatorioEscolar(dados, {
+            dataAlvo: dataAlvo,
+            horarioSalvo: horarioSalvo,
+            avisosLocais: avisosLocais
+        });
 
         if (
             dados.horarioEncontrado === true &&
@@ -5583,7 +5593,9 @@ async function enviarEmailDeveresAmanha(dados, dataAlvo) {
             },
             body: JSON.stringify({
                 dataAlvo: dataAlvo,
-                entregas: Array.isArray(dados?.entregas) ? dados.entregas : []
+                entregas: Array.isArray(dados?.entregas) ? dados.entregas : [],
+                avisos: Array.isArray(dados?.avisos) ? dados.avisos : [],
+                semAula: dados?.semAula === true
             })
         });
         const resultado = await resposta.json().catch(function () { return {}; });
@@ -5634,6 +5646,108 @@ function textoPareceEntregaDaAgenda(texto) {
     );
 }
 
+function textoPareceAvisoInstitucional(texto) {
+    const normalizado = normalizarPesquisa(texto);
+    return [
+        "periodo de inscricao", "inscricoes abertas", "prazo de inscricao",
+        "aulas de revisao de conteudos", "aula de revisao de conteudos",
+        "coordenacao e alunos", "coordenacao", "secretaria",
+        "comunicado", "informativo", "circular", "boleto",
+        "reuniao de responsaveis", "reuniao de pais", "viagem pedagogica"
+    ].some(function (termo) {
+        return normalizado.includes(termo);
+    });
+}
+
+function dataEhFimDeSemana(dataCampo) {
+    const dia = new Date(dataCampo + "T12:00:00").getDay();
+    return dia === 0 || dia === 6;
+}
+
+function materiasDoHorarioNaData(horarioSemanal, dataCampo) {
+    if (!Array.isArray(horarioSemanal) || !horarioSemanal.length) return [];
+    const indiceAlvo = new Date(dataCampo + "T12:00:00").getDay();
+    const entrada = horarioSemanal.find(function (item) {
+        return indiceDoDiaDaSemana(item.dia || "") === indiceAlvo;
+    });
+    return entrada && Array.isArray(entrada.aulas) ? entrada.aulas.filter(Boolean) : [];
+}
+
+function criarAvisoLocalDaAgenda(item, dataAlvo) {
+    const texto = [item.titulo, item.descricao, item.calendarioOriginal, item.materia]
+        .filter(Boolean)
+        .join(" ");
+    if (!textoPareceAvisoInstitucional(texto)) return null;
+
+    const dataRegistro = dataParaCampo(new Date(item.data));
+    const pista = pistaLocalDeEntrega(item);
+    const mencionaDataAlvo = pista.includes(dataAlvo);
+    if (dataRegistro !== dataAlvo && !mencionaDataAlvo) return null;
+
+    const origem = item.calendarioOriginal || item.materia || "Agenda escolar";
+    return (item.titulo || "Aviso da escola") + " — " + origem;
+}
+
+function normalizarRelatorioEscolar(dados, opcoes) {
+    if (!dados || typeof dados !== "object") return dados;
+    const dataAlvo = opcoes.dataAlvo;
+    const horarioSalvo = Array.isArray(opcoes.horarioSalvo) ? opcoes.horarioSalvo : [];
+    const avisosLocais = Array.isArray(opcoes.avisosLocais) ? opcoes.avisosLocais : [];
+    const avisos = Array.isArray(dados.avisos) ? dados.avisos.slice() : [];
+    const entregas = Array.isArray(dados.entregas) ? dados.entregas : [];
+    const entregasValidas = [];
+
+    entregas.forEach(function (item) {
+        const texto = [item.titulo, item.tipo, item.justificativa, item.origem]
+            .filter(Boolean)
+            .join(" ");
+        if (textoPareceAvisoInstitucional(texto)) {
+            avisos.push((item.titulo || "Aviso escolar") +
+                (item.origem ? " — " + item.origem : ""));
+            return;
+        }
+        if (item.dataEntrega && item.dataEntrega !== dataAlvo) return;
+        entregasValidas.push(item);
+    });
+
+    avisos.push(...avisosLocais);
+    dados.entregas = entregasValidas;
+    dados.avisos = Array.from(new Set(avisos.filter(Boolean)));
+
+    const fimDeSemana = dataEhFimDeSemana(dataAlvo);
+    const horarioConfiavel = Array.isArray(dados.horarioSemanal) && dados.horarioSemanal.length
+        ? dados.horarioSemanal
+        : horarioSalvo;
+    const materiasEsperadas = fimDeSemana
+        ? []
+        : materiasDoHorarioNaData(horarioConfiavel, dataAlvo);
+
+    dados.semAula = fimDeSemana || (horarioConfiavel.length > 0 && materiasEsperadas.length === 0);
+    if (dados.semAula) {
+        dados.materiasDoDia = [];
+        dados.resumo = fimDeSemana
+            ? "Não há aulas regulares previstas porque a data escolhida cai no fim de semana. " +
+              (entregasValidas.length
+                  ? "Mesmo assim, há uma entrega com prazo explícito para esse dia."
+                  : "Nenhum dever com prazo explícito foi confirmado para esse dia.")
+            : "O horário consultado não mostra aulas regulares nessa data.";
+    } else if (materiasEsperadas.length) {
+        const materiasDaIA = Array.isArray(dados.materiasDoDia) ? dados.materiasDoDia : [];
+        dados.materiasDoDia = materiasEsperadas.map(function (materia) {
+            const nome = normalizarPesquisa(materia);
+            return materiasDaIA.find(function (item) {
+                const nomeItem = normalizarPesquisa(item.materia || "");
+                return nomeItem.includes(nome) || nome.includes(nomeItem);
+            }) || {
+                materia: materia,
+                situacao: "Nenhum dever confirmado",
+                detalhe: "A matéria aparece no horário, mas não foi encontrado prazo para esse dia."
+            };
+        });
+    }
+    return dados;
+}
+
 function indiceDoDiaDaSemana(texto) {
     const dia = normalizarPesquisa(texto);
     if (dia.includes("domingo")) return 0;
@@ -5657,6 +5771,7 @@ function proximaDataComDiaDaSemana(dataRegistro, diaSemana) {
 function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
     const textoOriginal = (item.titulo || "") + " " + (item.descricao || "");
     const texto = normalizarPesquisa(textoOriginal);
+    if (textoPareceAvisoInstitucional(textoOriginal)) return null;
     const registro = new Date(item.data);
     let entrega = null;
     let regra = "";
@@ -5715,11 +5830,6 @@ function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
             entrega = proximaDataComDiaDaSemana(registro, indice);
             regra = "O aviso diz ‘próxima aula’ e foi cruzado com o horário salvo.";
         }
-    }
-
-    if (!entrega && textoPareceEntregaDaAgenda(textoOriginal)) {
-        entrega = new Date(registro);
-        regra = "A tarefa está registrada diretamente nesta data na Agenda escolar.";
     }
 
     return entrega ? { data: dataParaCampo(entrega), regra: regra } : null;
@@ -5931,7 +6041,11 @@ function desenharRelatorioResponsavel(
 
         <section class="cobertura-materias-relatorio">
             <h3>Matérias previstas para esse dia</h3>
-            ${materiasDoDia.length ? `
+            ${dados.semAula === true ? `
+                <p class="aviso-horario-nao-encontrado sem-aula-prevista">
+                    Não há aulas regulares previstas para essa data.
+                </p>
+            ` : materiasDoDia.length ? `
                 <div class="grade-cobertura-materias">
                     ${materiasDoDia.map(function (item) {
                         const situacao = item.situacao || "A confirmar";
@@ -5954,6 +6068,7 @@ function desenharRelatorioResponsavel(
         </section>
 
         <div class="tabela-pesquisa-rolagem">
+            <h3 class="titulo-lista-relatorio">Deveres e entregas</h3>
             <table class="tabela-pesquisa tabela-entregas-responsavel">
                 <thead><tr><th>Matéria</th><th>Tipo</th><th>O que fazer</th><th>Quando foi avisado</th><th>Prioridade</th></tr></thead>
                 <tbody>
@@ -5972,14 +6087,14 @@ function desenharRelatorioResponsavel(
             </table>
         </div>
 
-        ${avisos.length ? `
-            <section class="avisos-relatorio-responsavel">
-                <h3>⚠️ Pontos que precisam de confirmação</h3>
+        <section class="avisos-relatorio-responsavel">
+            <h3>📢 Avisos</h3>
+            ${avisos.length ? `
                 <ul>${avisos.map(function (aviso) {
                     return `<li>${protegerTexto(aviso)}</li>`;
                 }).join("")}</ul>
-            </section>
-        ` : ""}
+            ` : '<p>Nenhum aviso escolar encontrado para essa data.</p>'}
+        </section>
 
         ${horario.length ? `
             <details class="detalhes-finais horario-semanal-responsavel">
@@ -6179,7 +6294,9 @@ function eventoDaAgendaPareceEscolar(evento) {
         "avaliacao", "teste", "exercicio", "lista", "entrega",
         "seminario", "projeto", "estudar", "estudo", "revisao",
         "para casa", "para amanha", "proxima aula", "pagina",
-        "folha", "livro", "caderno", "red 6", "mat 6", "cie 6"
+        "folha", "livro", "caderno", "red 6", "mat 6", "cie 6",
+        "coordenacao", "inscricao", "comunicado", "secretaria",
+        "responsaveis", "alunos"
     ];
 
     const correspondeATurma = turmasClassroom.some(function (turma) {
