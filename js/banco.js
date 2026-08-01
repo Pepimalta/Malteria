@@ -9,7 +9,13 @@
         !String(config.chavePublica).startsWith("COLE_AQUI")
     );
     const cliente = configurado
-        ? window.supabase.createClient(config.url, config.chavePublica)
+        ? window.supabase.createClient(config.url, config.chavePublica, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        })
         : null;
     let intervalo = null;
     let salvando = false;
@@ -97,6 +103,49 @@
                 resposta.data.user &&
                 resposta.data.user.user_metadata &&
                 resposta.data.user.user_metadata.precisa_trocar_senha
+            )
+        });
+    }
+
+    async function restaurarSessao() {
+        if (!cliente) return null;
+
+        const resposta = await cliente.auth.getSession();
+        if (resposta.error) throw resposta.error;
+
+        const sessao = resposta.data.session;
+        if (!sessao || !sessao.user) return null;
+
+        let perfil;
+        try {
+            perfil = await perfilAtual();
+        } catch (erroPerfil) {
+            console.warn("Sessao encontrada, mas o perfil nao pode ser carregado:", erroPerfil);
+            const metadados = sessao.user.user_metadata || {};
+            perfil = {
+                id: sessao.user.id,
+                nome: metadados.nome || String(sessao.user.email || "").split("@")[0] || "Usuario",
+                email: sessao.user.email || "",
+                tipo: metadados.tipo === "Responsavel" ? "Responsavel" : "Aluno",
+                papel: String(sessao.user.email || "").toLowerCase() === "pepimalti@gmail.com"
+                    ? "superadmin"
+                    : "usuario",
+                perfilPendente: true
+            };
+        }
+
+        try {
+            await carregarEstado();
+        } catch (erroSincronizacao) {
+            console.warn("Sessao restaurada, mas os dados ainda nao foram sincronizados:", erroSincronizacao);
+        }
+
+        iniciarSincronizacao();
+
+        return Object.assign({}, perfil, {
+            precisaTrocarSenha: Boolean(
+                sessao.user.user_metadata &&
+                sessao.user.user_metadata.precisa_trocar_senha
             )
         });
     }
@@ -216,6 +265,7 @@
         cliente: cliente,
         cadastrar: cadastrar,
         entrar: entrar,
+        restaurarSessao: restaurarSessao,
         sair: sair,
         perfilAtual: perfilAtual,
         tokenAcesso: tokenAcesso,
