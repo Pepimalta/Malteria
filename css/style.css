@@ -3128,7 +3128,18 @@ body {
     font-weight: 500;
 }
 
-.ferramenta-texto { white-space: nowrap; }
+.ferramenta-texto {
+    visibility: hidden;
+    opacity: 0;
+    white-space: nowrap;
+    transition: opacity 0.16s ease;
+}
+
+.barra-lateral:hover .ferramenta-texto,
+.barra-lateral:focus-within .ferramenta-texto {
+    visibility: visible;
+    opacity: 1;
+}
 
 .historico-pesquisas-lateral {
     display: flex;
