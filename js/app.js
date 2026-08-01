@@ -340,6 +340,44 @@ function salvarUsuarioLocal(usuario) {
     );
 }
 
+async function restaurarSessaoMalteria() {
+    if (
+        recuperacaoSenhaAtiva ||
+        !window.MalteriaBanco?.configurado ||
+        !window.MalteriaBanco.restaurarSessao
+    ) {
+        return null;
+    }
+
+    try {
+        const perfil = await window.MalteriaBanco.restaurarSessao();
+        if (!perfil?.email) return null;
+
+        const usuarios = lerUsuariosLocais();
+        const usuarioLocal = usuarios.find(function (usuario) {
+            return normalizarEmail(usuario.email) === normalizarEmail(perfil.email);
+        }) || {};
+
+        usuarioAtual = Object.assign({}, usuarioLocal, {
+            id: perfil.id || usuarioLocal.id,
+            nome: perfil.nome || usuarioLocal.nome || "Estudante",
+            email: perfil.email,
+            tipo: perfil.tipo || usuarioLocal.tipo || "Aluno",
+            administrador: perfil.papel === "superadmin",
+            bancoConectado: true,
+            precisaTrocarSenha: perfil.precisaTrocarSenha === true
+        });
+
+        salvarUsuarioLocal(usuarioAtual);
+        return usuarioAtual;
+    } catch (erro) {
+        console.warn("Nao foi possivel restaurar a sessao da Malteria:", erro);
+        return null;
+    }
+}
+
+const promessaRestauracaoSessao = restaurarSessaoMalteria();
+
 /* NAVEGAÇÃO DA AUTENTICAÇÃO */
 
 function esconderTelasPrincipais() {
@@ -360,11 +398,18 @@ document
             "transicao-saindo"
         );
 
-        window.setTimeout(function () {
+        window.setTimeout(async function () {
             transicaoProximo.classList.add(
                 "transicao-saindo"
             );
-            mostrarTela(telaEscolha);
+
+            await promessaRestauracaoSessao;
+
+            if (usuarioAtual) {
+                entrarNoAplicativo();
+            } else {
+                mostrarTela(telaEscolha);
+            }
 
             window.setTimeout(function () {
                 transicaoProximo.classList.add("escondido");
@@ -1210,8 +1255,9 @@ function prepararPainelAluno() {
 
     document.querySelector(
         "#painel-responsavel-resumo"
-    ).classList.add("escondido");
+    ).classList.remove("escondido");
 
+    prepararRelatorioResponsavel();
     preencherMateriasCorrecao();
 }
 
@@ -1236,6 +1282,38 @@ function prepararPainelResponsavel() {
 
 /* VÁRIOS FILHOS */
 
+function filhoSelecionadoAtual() {
+    if (perfilVisualAtual() !== "responsavel") return null;
+
+    const seletor = document.querySelector("#filho-selecionado");
+    const filhos = usuarioAtual?.filhos || [];
+    const indice = Number(seletor?.value);
+
+    return Number.isInteger(indice) ? filhos[indice] || null : null;
+}
+
+function contaEscolarClassroomAtual() {
+    const filho = filhoSelecionadoAtual();
+
+    if (filho) {
+        return {
+            nome: filho.nome || "aluno",
+            email: normalizarEmail(filho.email || filho.emailGoogleVerificado || "")
+        };
+    }
+
+    return {
+        nome: usuarioAtual?.nome || "aluno",
+        email: normalizarEmail(usuarioAtual?.email || "")
+    };
+}
+
+function chaveFilhoSelecionado() {
+    return "malteriaFilhoSelecionado:" + normalizarEmail(
+        usuarioAtual?.email || "sem-conta"
+    );
+}
+
 function atualizarListaDeFilhos() {
     const seletor = document.querySelector(
         "#filho-selecionado"
@@ -1244,6 +1322,21 @@ function atualizarListaDeFilhos() {
     seletor.innerHTML = "";
 
     const filhos = usuarioAtual.filhos || [];
+
+    if (filhos.length === 0) {
+        const opcao = document.createElement("option");
+        opcao.value = "";
+        opcao.textContent = "Nenhum aluno vinculado";
+        seletor.appendChild(opcao);
+        seletor.disabled = true;
+        return;
+    }
+
+    seletor.disabled = false;
+    const emailSalvo = normalizarEmail(
+        localStorage.getItem(chaveFilhoSelecionado()) || ""
+    );
+    let indiceSelecionado = 0;
 
     filhos.forEach(function (filho, indice) {
         const opcao = document.createElement(
@@ -1254,8 +1347,29 @@ function atualizarListaDeFilhos() {
         opcao.textContent = filho.nome;
 
         seletor.appendChild(opcao);
+
+        if (normalizarEmail(filho.email) === emailSalvo) {
+            indiceSelecionado = indice;
+        }
     });
+
+    seletor.value = String(indiceSelecionado);
 }
+
+document
+    .querySelector("#filho-selecionado")
+    .addEventListener("change", async function () {
+        const filho = filhoSelecionadoAtual();
+
+        localStorage.setItem(
+            chaveFilhoSelecionado(),
+            normalizarEmail(filho?.email || "")
+        );
+
+        materiaAtual = null;
+        await restaurarConexaoClassroom();
+        prepararRelatorioResponsavel();
+    });
 
 document
     .querySelector("#adicionar-filho")
@@ -1593,6 +1707,7 @@ function mostrarPaginaPrincipal() {
 }
 
 function mostrarPaginaAgenda() {
+    prepararRelatorioResponsavel();
     mostrarPaginaInterna(paginaAgenda);
 }
 
@@ -4957,8 +5072,9 @@ botaoClassroom.addEventListener(
 );
 
 function chaveConexaoClassroom() {
+    const contaEscolar = contaEscolarClassroomAtual();
     const email = normalizarPesquisa(
-        usuarioAtual?.email || "sem-conta"
+        contaEscolar.email || usuarioAtual?.email || "sem-conta"
     );
 
     return "malteriaClassroom:" + email;
@@ -4969,14 +5085,15 @@ function salvarConexaoClassroom() {
         return;
     }
 
+    const contaEscolar = contaEscolarClassroomAtual();
+
     localStorage.setItem(
         chaveConexaoClassroom(),
         JSON.stringify({
             conectado: true,
             turmas: turmasClassroom,
-            emailGoogle: normalizarEmail(
-                usuarioAtual.emailGoogleVerificado || ""
-            ),
+            nomeAluno: contaEscolar.nome,
+            emailGoogle: contaEscolar.email,
             atualizadoEm: new Date().toISOString()
         })
     );
@@ -5207,12 +5324,19 @@ async function receberTokenClassroom(resposta) {
     statusClassroom.textContent =
         "Classroom conectado. Confirmando a conta...";
 
-    await confirmarIdentidadeGoogle();
+    try {
+        await confirmarIdentidadeGoogle();
 
-    statusClassroom.textContent =
-        "Conta confirmada. Carregando turmas...";
+        statusClassroom.textContent =
+            "Conta confirmada. Carregando turmas...";
 
-    await carregarTurmas();
+        await carregarTurmas();
+    } catch (erro) {
+        tokenClassroom = "";
+        cartaoClassroom.classList.remove("conectado", "carregando");
+        textoClassroom.textContent = "Conectar a conta escolar correta";
+        statusClassroom.textContent = erro.message;
+    }
 }
 
 async function confirmarIdentidadeGoogle() {
@@ -5241,16 +5365,27 @@ async function confirmarIdentidadeGoogle() {
         const emailGoogle = normalizarEmail(
             identidade.email
         );
-        const emailDaConta = normalizarEmail(
-            usuarioAtual.email
-        );
-
-        usuarioAtual.emailGoogleVerificado =
-            emailGoogle;
-
-        usuarioAtual.identidadeGoogleVerificada =
+        const contaEscolar = contaEscolarClassroomAtual();
+        const emailDaConta = contaEscolar.email;
+        const identidadeCorreta =
             identidade.email_verified === true &&
-            emailGoogle === emailDaConta;
+            (!emailDaConta || emailGoogle === emailDaConta);
+
+        if (!identidadeCorreta) {
+            throw new Error(
+                "Escolha a conta escolar de " + contaEscolar.nome +
+                (emailDaConta ? " (" + emailDaConta + ")." : ".")
+            );
+        }
+
+        const filho = filhoSelecionadoAtual();
+        if (filho) {
+            filho.emailGoogleVerificado = emailGoogle;
+            filho.identidadeGoogleVerificada = true;
+        } else {
+            usuarioAtual.emailGoogleVerificado = emailGoogle;
+            usuarioAtual.identidadeGoogleVerificada = true;
+        }
 
         salvarUsuarioLocal(usuarioAtual);
 
@@ -5276,12 +5411,14 @@ async function confirmarIdentidadeGoogle() {
                 "conecte a conta Google pepimalti@gmail.com.";
         }
     } catch (erro) {
-        usuarioAtual.identidadeGoogleVerificada = false;
+        const filho = filhoSelecionadoAtual();
+        if (filho) {
+            filho.identidadeGoogleVerificada = false;
+        } else {
+            usuarioAtual.identidadeGoogleVerificada = false;
+        }
         salvarUsuarioLocal(usuarioAtual);
-
-        statusClassroom.textContent =
-            "O Classroom conectou, mas não foi possível " +
-            "confirmar o e-mail da conta.";
+        throw erro;
     }
 }
 
@@ -5624,9 +5761,12 @@ async function enviarEmailDeveresAmanha(dados, dataAlvo) {
 }
 
 function chaveHorarioSemanalResponsavel() {
-    const filho = document.querySelector("#filho-selecionado")?.value || "aluno-atual";
+    const filho = filhoSelecionadoAtual();
+    const identificador = normalizarEmail(
+        filho?.email || usuarioAtual?.email || "aluno-atual"
+    );
     const conta = normalizarEmail(usuarioAtual?.email || "sem-conta");
-    return "malteriaHorarioSemanal:" + conta + ":" + filho;
+    return "malteriaHorarioSemanal:" + conta + ":" + identificador;
 }
 
 function lerHorarioSemanalResponsavel() {
