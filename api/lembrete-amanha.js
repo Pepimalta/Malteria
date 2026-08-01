@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 
+const EMAIL_DONO = "pepimalti@gmail.com";
+
 function configuracaoSupabase() {
     const url = String(
         process.env.SUPABASE_URL ||
@@ -57,7 +59,12 @@ async function exigirResponsavel(req) {
         "&select=id,nome,email,tipo"
     );
     const perfil = perfis[0];
-    if (!perfil || perfil.tipo !== "Responsável") {
+    const emailPerfil = String(perfil?.email || "").trim().toLowerCase();
+    const podeReceber = perfil && (
+        perfil.tipo === "Responsável" ||
+        emailPerfil === EMAIL_DONO
+    );
+    if (!podeReceber) {
         const erro = new Error("O lembrete por e-mail é exclusivo da conta do responsável.");
         erro.status = 403;
         throw erro;
