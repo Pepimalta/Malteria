@@ -1192,13 +1192,9 @@ function entrarNoAplicativo() {
 
 function aplicarVisibilidadePorPerfil() {
     const perfil = perfilVisualAtual();
-    const dono = usuarioEhDono(usuarioAtual);
 
     document.querySelectorAll("[data-perfil-visivel]").forEach(function (elemento) {
-        const sempreVisivelParaDono =
-            dono && elemento.hasAttribute("data-dono-sempre-visivel");
-        elemento.hidden = !sempreVisivelParaDono &&
-            elemento.dataset.perfilVisivel !== perfil;
+        elemento.hidden = elemento.dataset.perfilVisivel !== perfil;
     });
 }
 
@@ -5448,16 +5444,22 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
     try {
         const agenda = await obterEventosAgenda(dataInicio, dataFimConsulta);
         const eventosEscolares = agenda.fontes.filter(eventoDaAgendaPareceEscolar);
+        const horarioSalvo = lerHorarioSemanalResponsavel();
         const contextoClassroom = await obterContextoResponsavelClassroom(
             dataInicio,
-            dataFimConsulta
+            dataFimConsulta,
+            horarioSalvo
         );
-        const horarioSalvo = lerHorarioSemanalResponsavel();
-        const entregasLocais = eventosEscolares
+        const entregasLocaisAgenda = eventosEscolares
             .map(function (item) {
                 return criarEntregaLocalDaAgenda(item, dataAlvo, horarioSalvo);
             })
             .filter(Boolean);
+        const entregasLocais = entregasLocaisAgenda.concat(
+            Array.isArray(contextoClassroom.entregas)
+                ? contextoClassroom.entregas
+                : []
+        );
         const avisosLocais = eventosEscolares
             .map(function (item) {
                 return criarAvisoLocalDaAgenda(item, dataAlvo);
@@ -5505,7 +5507,7 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
                     "\n\n=== TURMAS OFICIAIS DO CLASSROOM ===\n" +
                     (turmasOficiais || "Nenhuma turma oficial carregada.") +
                     "\n\n=== CLASSROOM E HORÁRIO ===\n" +
-                    contextoClassroom +
+                    contextoClassroom.texto +
                     "\n\n=== ENTREGAS CONFIRMADAS PELO CÁLCULO LOCAL ===\n" +
                     (entregasLocais.length
                         ? JSON.stringify(entregasLocais)
@@ -5519,11 +5521,14 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
             })
         });
 
-        const dados = await resposta.json();
-
-        if (!resposta.ok) {
-            throw new Error(dados.erro || "Não foi possível preparar o relatório.");
-        }
+        const respostaDados = await resposta.json().catch(function () { return {}; });
+        const dados = resposta.ok ? respostaDados : {
+            resumo: "Relatório montado diretamente com os dados confirmados da Agenda e do Classroom.",
+            entregas: [],
+            avisos: [],
+            horarioSemanal: horarioSalvo,
+            horarioEncontrado: horarioSalvo.length > 0
+        };
 
         incorporarEntregasLocaisNoRelatorio(dados, entregasLocais);
         normalizarRelatorioEscolar(dados, {
@@ -5662,7 +5667,8 @@ function textoPareceAvisoInstitucional(texto) {
         "aulas de revisao de conteudos", "aula de revisao de conteudos",
         "coordenacao e alunos", "coordenacao", "secretaria",
         "comunicado", "informativo", "circular", "boleto",
-        "reuniao de responsaveis", "reuniao de pais", "viagem pedagogica"
+        "reuniao de responsaveis", "reuniao de pais", "viagem pedagogica",
+        "aviso", "lembrete", "evento escolar", "olimpiada", "oba"
     ].some(function (termo) {
         return normalizado.includes(termo);
     });
@@ -5781,6 +5787,30 @@ function proximaDataComDiaDaSemana(dataRegistro, diaSemana) {
     return resultado;
 }
 
+function nomesDeMateriaCompativeis(nomeA, nomeB) {
+    const a = normalizarPesquisa(nomeA || "");
+    const b = normalizarPesquisa(nomeB || "");
+    if (!a || !b) return false;
+    if (a.includes(b) || b.includes(a)) return true;
+
+    const grupos = [
+        ["red", "redacao", "portugues", "lingua portuguesa"],
+        ["mat", "matematica"],
+        ["cie", "ciencias"],
+        ["geo", "geografia", "geography"],
+        ["his", "historia"],
+        ["ing", "ingles", "english"],
+        ["esp", "espanhol", "spanish"],
+        ["religiao", "ensino religioso"],
+        ["pensamento computacional", "computacao"]
+    ];
+
+    return grupos.some(function (grupo) {
+        return grupo.some(function (termo) { return a.includes(termo); }) &&
+            grupo.some(function (termo) { return b.includes(termo); });
+    });
+}
+
 function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
     const textoOriginal = (item.titulo || "") + " " + (item.descricao || "");
     const texto = normalizarPesquisa(textoOriginal);
@@ -5831,16 +5861,20 @@ function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
     }
 
     if (!entrega && /\bproxima aula\b/.test(texto) && Array.isArray(horarioSemanal)) {
-        const materia = normalizarPesquisa(item.materia || item.calendarioOriginal || "");
-        const entradaHorario = horarioSemanal.find(function (entrada) {
+        const materia = item.materia || item.calendarioOriginal || "";
+        const proximasDatas = horarioSemanal.filter(function (entrada) {
             return (entrada.aulas || []).some(function (aula) {
-                const nomeAula = normalizarPesquisa(aula);
-                return nomeAula.includes(materia) || materia.includes(nomeAula);
+                return nomesDeMateriaCompativeis(aula, materia);
             });
+        }).map(function (entrada) {
+            const indice = indiceDoDiaDaSemana(entrada.dia);
+            return indice >= 0 ? proximaDataComDiaDaSemana(registro, indice) : null;
+        }).filter(Boolean).sort(function (a, b) {
+            return a.getTime() - b.getTime();
         });
-        const indice = entradaHorario ? indiceDoDiaDaSemana(entradaHorario.dia) : -1;
-        if (indice >= 0) {
-            entrega = proximaDataComDiaDaSemana(registro, indice);
+
+        if (proximasDatas.length) {
+            entrega = proximasDatas[0];
             regra = "O aviso diz ‘próxima aula’ e foi cruzado com o horário salvo.";
         }
     }
@@ -5940,9 +5974,10 @@ function pistaLocalDeEntrega(item) {
     return "nenhuma data explícita; verificar o texto e o horário da matéria";
 }
 
-async function obterContextoResponsavelClassroom(dataInicio, dataAlvo) {
+async function obterContextoResponsavelClassroom(dataInicio, dataAlvo, horarioSemanal) {
     let texto = "";
     const anexosHorario = [];
+    const entregas = [];
 
     for (const turma of turmasClassroom.slice(0, 20)) {
         try {
@@ -6002,6 +6037,35 @@ async function obterContextoResponsavelClassroom(dataInicio, dataAlvo) {
                         "Título: " + (atividade.title || "") + "\n" +
                         "Descrição: " + (atividade.description || "") + "\n";
                 }
+
+                let calculoLocal = null;
+                if (dataEntrega === dataAlvo) {
+                    calculoLocal = {
+                        data: dataAlvo,
+                        regra: "O Classroom informa oficialmente esta data de entrega."
+                    };
+                } else if (dataCriacao >= dataInicio && dataCriacao <= dataAlvo) {
+                    calculoLocal = calcularEntregaLocalDaAgenda({
+                        titulo: atividade.title || "",
+                        descricao: atividade.description || "",
+                        data: new Date(atividade.creationTime || atividade.updateTime || 0),
+                        materia: turma.name,
+                        calendarioOriginal: turma.name
+                    }, horarioSemanal || []);
+                }
+
+                if (calculoLocal && calculoLocal.data === dataAlvo) {
+                    entregas.push({
+                        materia: turma.name,
+                        tipo: identificarTipoAtividade(atividade),
+                        titulo: atividade.title || "Atividade do Classroom",
+                        dataEntrega: dataAlvo,
+                        dataRegistro: dataCriacao,
+                        origem: "Google Classroom",
+                        justificativa: calculoLocal.regra,
+                        prioridade: "Alta"
+                    });
+                }
             });
         } catch (erro) {
             console.warn("Não foi possível consultar a turma:", turma.name, erro);
@@ -6023,7 +6087,10 @@ async function obterContextoResponsavelClassroom(dataInicio, dataAlvo) {
         }
     }
 
-    return texto || "Nenhum horário ou atividade adicional foi localizado no Classroom.";
+    return {
+        texto: texto || "Nenhum horário ou atividade adicional foi localizado no Classroom.",
+        entregas: entregas
+    };
 }
 
 function desenharRelatorioResponsavel(
@@ -6106,7 +6173,7 @@ function desenharRelatorioResponsavel(
                 <ul>${avisos.map(function (aviso) {
                     return `<li>${protegerTexto(aviso)}</li>`;
                 }).join("")}</ul>
-            ` : '<p>Nenhum aviso escolar encontrado para essa data.</p>'}
+            ` : '<p>Nenhum aviso escolar encontrado nas semanas consultadas.</p>'}
         </section>
 
         ${horario.length ? `
@@ -6141,54 +6208,21 @@ function prepararDataInicialAtividades() {
 async function carregarAtividadesDaData() {
     prepararDataInicialAtividades();
 
-    const dataEscolhida = new Date(
-        campoDataAtividades.value + "T12:00:00"
-    );
-
     tituloAtividadesData.textContent = "Para amanhã";
 
-    // O dono pode alternar entre os módulos Aluno e Responsável. A decisão
-    // precisa seguir o módulo exibido, não apenas o tipo original da conta.
-    if (perfilVisualAtual() === "responsavel") {
-        const statusAutomatico = { textContent: "" };
-        await carregarRelatorioResponsavel({
-            dataAlvo: campoDataAtividades.value,
-            dataReferencia: dataParaCampo(new Date()),
-            horizonte: 21,
-            statusElement: statusAutomatico,
-            areaElement: document.querySelector("#atividades-amanha"),
-            buttonElement: null,
-            enviarEmail: true
-        });
-        return;
-    }
-
-    document.querySelector("#atividades-amanha").innerHTML =
-        "<p>Consultando a Agenda Google...</p>";
-
-    try {
-        const agenda = await obterEventosAgenda(
-            campoDataAtividades.value,
-            campoDataAtividades.value
-        );
-
-        const eventosEscolares = agenda.fontes.filter(
-            eventoDaAgendaPareceEscolar
-        );
-
-        desenharAtividadesDaData(
-            eventosEscolares,
-            dataEscolhida
-        );
-    } catch (erro) {
-        document.querySelector("#atividades-amanha").innerHTML = `
-            <p class="erro">
-                ${protegerTexto(
-                    erro.message || "Não foi possível consultar a Agenda."
-                )}
-            </p>
-        `;
-    }
+    // Aluno e responsável usam a mesma busca retroativa. Assim, “Para
+    // amanhã” lê os avisos das últimas três semanas e calcula a data real
+    // indicada por “para amanhã”, “próxima aula” ou uma data escrita.
+    const statusAutomatico = { textContent: "" };
+    await carregarRelatorioResponsavel({
+        dataAlvo: campoDataAtividades.value,
+        dataReferencia: dataParaCampo(new Date()),
+        horizonte: 21,
+        statusElement: statusAutomatico,
+        areaElement: document.querySelector("#atividades-amanha"),
+        buttonElement: null,
+        enviarEmail: perfilVisualAtual() === "responsavel"
+    });
 }
 
 function desenharAtividadesDaData(itens, dataEscolhida) {
