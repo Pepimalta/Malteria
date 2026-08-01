@@ -528,6 +528,16 @@
                 title="Voltar ao início"
             >M</button>
 
+            <button id="abrir-correcao-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="aluno" data-dono-sempre-visivel>
+                <span class="ferramenta-icone">✅</span>
+                <span class="ferramenta-texto">Correção</span>
+            </button>
+
+            <button id="abrir-gabaritos-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="responsavel" data-dono-sempre-visivel>
+                <span class="ferramenta-icone">📋</span>
+                <span class="ferramenta-texto">Gabaritos</span>
+            </button>
+
             <button id="abrir-agenda-lateral" class="ferramenta-lateral" type="button">
                 <span class="ferramenta-icone">📅</span>
                 <span class="ferramenta-texto">Agenda</span>
@@ -546,16 +556,6 @@
             <button id="abrir-trabalhos-lateral" class="ferramenta-lateral" type="button">
                 <span class="ferramenta-icone">🗂️</span>
                 <span class="ferramenta-texto">Trabalhos escolares</span>
-            </button>
-
-            <button id="abrir-correcao-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="aluno">
-                <span class="ferramenta-icone">✅</span>
-                <span class="ferramenta-texto">Correção</span>
-            </button>
-
-            <button id="abrir-gabaritos-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="responsavel">
-                <span class="ferramenta-icone">📋</span>
-                <span class="ferramenta-texto">Gabaritos</span>
             </button>
 
             <button id="abrir-pesquisa" class="ferramenta-lateral" type="button">
@@ -710,7 +710,7 @@
             </section>
 
             <!-- PÁGINA DE CORREÇÃO DE DEVERES (ALUNO) -->
-            <section id="pagina-correcao" class="pagina-ferramenta pagina-correcao escondido" data-perfil-visivel="aluno">
+            <section id="pagina-correcao" class="pagina-ferramenta pagina-correcao escondido" data-perfil-visivel="aluno" data-dono-sempre-visivel>
                 <button id="fechar-correcao" class="botao-link voltar-ferramenta" type="button">← Voltar</button>
                 <div class="cabecalho-ferramenta cabecalho-correcao">
                     <span>✅</span>
@@ -736,7 +736,7 @@
             </section>
 
             <!-- PÁGINA DE GABARITOS (RESPONSÁVEL) -->
-            <section id="pagina-gabaritos" class="pagina-ferramenta pagina-gabaritos escondido" data-perfil-visivel="responsavel">
+            <section id="pagina-gabaritos" class="pagina-ferramenta pagina-gabaritos escondido" data-perfil-visivel="responsavel" data-dono-sempre-visivel>
                 <button id="fechar-gabaritos" class="botao-link voltar-ferramenta" type="button">← Voltar</button>
                 <div class="cabecalho-ferramenta cabecalho-gabaritos">
                     <span>📋</span>
