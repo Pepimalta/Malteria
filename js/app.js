@@ -1192,9 +1192,13 @@ function entrarNoAplicativo() {
 
 function aplicarVisibilidadePorPerfil() {
     const perfil = perfilVisualAtual();
+    const dono = usuarioEhDono(usuarioAtual);
 
     document.querySelectorAll("[data-perfil-visivel]").forEach(function (elemento) {
-        elemento.hidden = elemento.dataset.perfilVisivel !== perfil;
+        const sempreVisivelParaDono =
+            dono && elemento.hasAttribute("data-dono-sempre-visivel");
+        elemento.hidden = !sempreVisivelParaDono &&
+            elemento.dataset.perfilVisivel !== perfil;
     });
 }
 
@@ -5578,7 +5582,12 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
 }
 
 async function enviarEmailDeveresAmanha(dados, dataAlvo) {
-    if (usuarioAtual?.tipo !== "Responsável") return { enviado: false };
+    const podeReceberResumo =
+        usuarioAtual?.tipo === "Responsável" ||
+        usuarioEhDono(usuarioAtual);
+    if (!podeReceberResumo || perfilVisualAtual() !== "responsavel") {
+        return { enviado: false };
+    }
     if (!window.MalteriaBanco?.configurado) {
         return { enviado: false, erro: "banco de dados não configurado" };
     }
@@ -5680,12 +5689,16 @@ function criarAvisoLocalDaAgenda(item, dataAlvo) {
     if (!textoPareceAvisoInstitucional(texto)) return null;
 
     const dataRegistro = dataParaCampo(new Date(item.data));
-    const pista = pistaLocalDeEntrega(item);
-    const mencionaDataAlvo = pista.includes(dataAlvo);
-    if (dataRegistro !== dataAlvo && !mencionaDataAlvo) return null;
-
     const origem = item.calendarioOriginal || item.materia || "Agenda escolar";
-    return (item.titulo || "Aviso da escola") + " — " + origem;
+    const publicadoEm = dataRegistro
+        ? " (publicado em " + formatarDataCampo(dataRegistro) + ")"
+        : "";
+
+    // Avisos institucionais continuam importantes mesmo quando foram
+    // publicados antes da data preparada. Eles aparecem na seção Avisos,
+    // nunca como dever de casa ou aula.
+    return (item.titulo || "Aviso da escola") +
+        " — " + origem + publicadoEm;
 }
 
 function normalizarRelatorioEscolar(dados, opcoes) {
@@ -6134,7 +6147,9 @@ async function carregarAtividadesDaData() {
 
     tituloAtividadesData.textContent = "Para amanhã";
 
-    if (usuarioAtual?.tipo === "Responsável") {
+    // O dono pode alternar entre os módulos Aluno e Responsável. A decisão
+    // precisa seguir o módulo exibido, não apenas o tipo original da conta.
+    if (perfilVisualAtual() === "responsavel") {
         const statusAutomatico = { textContent: "" };
         await carregarRelatorioResponsavel({
             dataAlvo: campoDataAtividades.value,
