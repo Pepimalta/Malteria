@@ -3445,7 +3445,7 @@ function desenharTabelaTrabalhos(dados, fontes, periodo) {
     if (!trabalhos.length) {
         area.innerHTML =
             "<div class=\"vazio-trabalhos\"><span>🔎</span><h2>Nenhum trabalho identificado</h2>" +
-            "<p>Não encontrei evidência de trabalhos nesse período. Confira as datas ou veja se a conta escolar correta está conectada.</p></div>";
+            "<p>Não encontrei evidência de trabalhos nesse período. Confira as datas ou veja se o Classroom está conectado.</p></div>";
         area.classList.remove("escondido");
         return;
     }
@@ -5086,6 +5086,12 @@ function salvarConexaoClassroom() {
     }
 
     const contaEscolar = contaEscolarClassroomAtual();
+    const filho = filhoSelecionadoAtual();
+    const emailGoogleConectado = normalizarEmail(
+        filho?.emailGoogleVerificado ||
+        usuarioAtual.emailGoogleVerificado ||
+        contaEscolar.email
+    );
 
     localStorage.setItem(
         chaveConexaoClassroom(),
@@ -5093,7 +5099,7 @@ function salvarConexaoClassroom() {
             conectado: true,
             turmas: turmasClassroom,
             nomeAluno: contaEscolar.nome,
-            emailGoogle: contaEscolar.email,
+            emailGoogle: emailGoogleConectado,
             atualizadoEm: new Date().toISOString()
         })
     );
@@ -5334,7 +5340,7 @@ async function receberTokenClassroom(resposta) {
     } catch (erro) {
         tokenClassroom = "";
         cartaoClassroom.classList.remove("conectado", "carregando");
-        textoClassroom.textContent = "Conectar a conta escolar correta";
+        textoClassroom.textContent = "Tentar conectar novamente";
         statusClassroom.textContent = erro.message;
     }
 }
@@ -5367,15 +5373,9 @@ async function confirmarIdentidadeGoogle() {
         );
         const contaEscolar = contaEscolarClassroomAtual();
         const emailDaConta = contaEscolar.email;
-        const identidadeCorreta =
-            identidade.email_verified === true &&
-            (!emailDaConta || emailGoogle === emailDaConta);
 
-        if (!identidadeCorreta) {
-            throw new Error(
-                "Escolha a conta escolar de " + contaEscolar.nome +
-                (emailDaConta ? " (" + emailDaConta + ")." : ".")
-            );
+        if (identidade.email_verified !== true || !emailGoogle) {
+            throw new Error("O Google não confirmou o e-mail desta conta.");
         }
 
         const filho = filhoSelecionadoAtual();
@@ -6428,7 +6428,7 @@ function desenharAtividadesDaData(itens, dataEscolhida) {
                                 </small>
                             ` : `
                                 <small class="conta-link-agenda aviso">
-                                    O Google poderá pedir que você escolha a conta escolar.
+                                    O Google poderá pedir que você escolha uma Conta Google com acesso ao Classroom.
                                 </small>
                             `}
                         ` : ""}
