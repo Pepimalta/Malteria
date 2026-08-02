@@ -13,8 +13,11 @@ const ESCOPOS_CLASSROOM = [
     "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
 ].join(" ");
 
-const ENDERECO_IA =
-    "https://pepi-estudos.vercel.app/api/estudar";
+// No site publicado, usa sempre o mesmo domínio que está aberto.
+// Assim, renomear o projeto na Vercel não quebra a API da Maltéria.
+const ENDERECO_IA = window.location.protocol === "file:"
+    ? "https://malteria.vercel.app/api/estudar"
+    : "/api/estudar";
 
 const EMAIL_DONO_MALTERIA =
     "pepimalti@gmail.com";
