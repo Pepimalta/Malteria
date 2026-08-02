@@ -5517,9 +5517,84 @@ const dataRelatorioResponsavel =
 const dataReferenciaRelatorioResponsavel =
     document.querySelector("#data-referencia-relatorio-responsavel");
 
+const arquivoHorarioOficial =
+    document.querySelector("#arquivo-horario-oficial");
+
+const botaoAnalisarHorarioOficial =
+    document.querySelector("#analisar-horario-oficial");
+
+const statusHorarioOficial =
+    document.querySelector("#status-horario-oficial");
+
 document
     .querySelector("#atualizar-relatorio-responsavel")
     .addEventListener("click", carregarRelatorioResponsavel);
+
+if (botaoAnalisarHorarioOficial) {
+    botaoAnalisarHorarioOficial.addEventListener("click", analisarHorarioOficial);
+}
+
+async function analisarHorarioOficial() {
+    const arquivo = arquivoHorarioOficial?.files?.[0];
+    if (!arquivo) {
+        statusHorarioOficial.textContent = "Escolha a foto ou o PDF oficial do horário.";
+        return;
+    }
+
+    const turma = identificarTurmaPrincipalDoAluno();
+    if (!turma) {
+        statusHorarioOficial.textContent =
+            "Conecte o Classroom primeiro para a Maltéria identificar a turma do aluno.";
+        return;
+    }
+
+    botaoAnalisarHorarioOficial.disabled = true;
+    botaoAnalisarHorarioOficial.textContent = "Lendo horário...";
+    statusHorarioOficial.textContent =
+        "Conferindo somente a coluna da turma " + turma + " no documento oficial...";
+
+    try {
+        const preparado = await prepararArquivoEvolucao(arquivo, "horario-oficial");
+        const resposta = await fetch(ENDERECO_IA, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                tipo: "interpretar_horario",
+                materia: "Horário escolar",
+                turma: turma,
+                conteudo: "Documento oficial do horário semanal da escola.",
+                arquivos: [preparado]
+            })
+        });
+        const dados = await resposta.json().catch(function () { return {}; });
+        if (!resposta.ok) {
+            throw new Error(dados.erro || "Não foi possível ler o horário.");
+        }
+
+        const horario = dados.horarioEncontrado === true
+            ? normalizarHorarioSemanalConfiavel(dados.horarioSemanal)
+            : [];
+        if (!horario.length) {
+            throw new Error(
+                dados.observacao ||
+                "A coluna da turma " + turma + " não foi identificada no documento."
+            );
+        }
+
+        salvarHorarioSemanalResponsavel(horario);
+        statusHorarioOficial.textContent =
+            "Horário oficial da turma " +
+            (dados.turmaIdentificada || turma) +
+            " salvo para este aluno.";
+        await carregarRelatorioResponsavel();
+    } catch (erro) {
+        console.error(erro);
+        statusHorarioOficial.textContent = traduzirErroDaInteligencia(erro.message);
+    } finally {
+        botaoAnalisarHorarioOficial.disabled = false;
+        botaoAnalisarHorarioOficial.textContent = "Ler horário oficial";
+    }
+}
 
 function prepararRelatorioResponsavel() {
     dataReferenciaRelatorioResponsavel.value = dataParaCampo(new Date());
@@ -5585,9 +5660,13 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
             .filter(function (evento) {
                 return eventoPertenceATurma(evento, turmaPrincipal);
             });
-        const horarioSalvo = lerHorarioSemanalResponsavel();
-        const horarioInferido = inferirHorarioPelosEventos(eventosEscolares);
-        const horarioBase = mesclarHorariosSemanais(horarioSalvo, horarioInferido);
+        // Somente um horário lido do documento oficial ou confirmado e salvo
+        // para este aluno pode ser usado. A frequência dos eventos da Agenda
+        // não representa a grade de aulas e não é uma fonte confiável.
+        const horarioSalvo = normalizarHorarioSemanalConfiavel(
+            lerHorarioSemanalResponsavel()
+        );
+        const horarioBase = horarioSalvo;
         const contextoClassroom = await obterContextoResponsavelClassroom(
             dataInicio,
             dataFimConsulta,
@@ -5676,33 +5755,38 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
             horarioEncontrado: horarioSalvo.length > 0
         };
 
-        incorporarEntregasLocaisNoRelatorio(dados, entregasLocais);
+        const horarioLidoAgora = dados.horarioEncontrado === true
+            ? normalizarHorarioSemanalConfiavel(dados.horarioSemanal)
+            : [];
+        const horarioConfirmado = horarioLidoAgora.length
+            ? horarioLidoAgora
+            : horarioSalvo;
 
-        // O horário reconstruído no navegador vem das turmas e calendários
-        // realmente conectados e prevalece sobre uma resposta ambígua da IA.
-        if (horarioBase.length) {
-            dados.horarioEncontrado = true;
-            dados.horarioSemanal = horarioBase;
-        }
+        // Na primeira leitura, o documento oficial pode ter acabado de ser
+        // interpretado pela IA. Recalcula então os avisos "para casa" e
+        // "próxima aula" usando esse horário, ainda na mesma consulta.
+        const entregasRecalculadas = horarioConfirmado.length
+            ? eventosEscolares.map(function (item) {
+                return criarEntregaLocalDaAgenda(item, dataAlvo, horarioConfirmado);
+            }).filter(Boolean)
+            : [];
+
+        incorporarEntregasLocaisNoRelatorio(
+            dados,
+            entregasLocais.concat(entregasRecalculadas)
+        );
+
+        dados.horarioEncontrado = horarioConfirmado.length > 0;
+        dados.horarioSemanal = horarioConfirmado;
 
         normalizarRelatorioEscolar(dados, {
             dataAlvo: dataAlvo,
-            horarioSalvo: horarioBase,
+            horarioSalvo: horarioConfirmado,
             avisosLocais: avisosLocais
         });
 
-        if (horarioBase.length) {
-            dados.horarioEncontrado = true;
-            dados.horarioSemanal = horarioBase;
-            salvarHorarioSemanalResponsavel(horarioBase);
-        }
-
-        if (
-            dados.horarioEncontrado === true &&
-            Array.isArray(dados.horarioSemanal) &&
-            dados.horarioSemanal.length
-        ) {
-            salvarHorarioSemanalResponsavel(dados.horarioSemanal);
+        if (horarioConfirmado.length) {
+            salvarHorarioSemanalResponsavel(horarioConfirmado);
         }
 
         desenharRelatorioResponsavel(
@@ -5789,7 +5873,8 @@ function chaveHorarioSemanalResponsavel() {
         filho?.email || usuarioAtual?.email || "aluno-atual"
     );
     const conta = normalizarEmail(usuarioAtual?.email || "sem-conta");
-    return "malteriaHorarioSemanal:" + conta + ":" + identificador;
+    // v2 ignora grades antigas que foram estimadas incorretamente pela Agenda.
+    return "malteriaHorarioSemanal:v2:" + conta + ":" + identificador;
 }
 
 function lerHorarioSemanalResponsavel() {
@@ -5808,6 +5893,34 @@ function salvarHorarioSemanalResponsavel(horario) {
         chaveHorarioSemanalResponsavel(),
         JSON.stringify(horario)
     );
+}
+
+function normalizarHorarioSemanalConfiavel(horario) {
+    if (!Array.isArray(horario)) return [];
+
+    return horario.map(function (entrada) {
+        const dia = String(entrada?.dia || "").trim();
+        const indiceDia = indiceDoDiaDaSemana(dia);
+        if (indiceDia < 1 || indiceDia > 5) return null;
+
+        const aulas = [];
+        (Array.isArray(entrada.aulas) ? entrada.aulas : []).forEach(function (aula) {
+            const nome = String(aula || "").trim();
+            const normalizado = normalizarPesquisa(nome);
+            if (!nome || !normalizado) return;
+            if (
+                normalizado.includes("agenda escolar") ||
+                normalizado === "agenda" ||
+                normalizado.includes("recreio") ||
+                normalizado.includes("intervalo")
+            ) return;
+            if (!aulas.some(function (existente) {
+                return nomesDeMateriaCompativeis(existente, nome);
+            })) aulas.push(nome);
+        });
+
+        return aulas.length ? { dia: dia, aulas: aulas } : null;
+    }).filter(Boolean);
 }
 
 function nomeDoDiaDaSemana(data) {
@@ -6071,12 +6184,22 @@ function nomesDeMateriaCompativeis(nomeA, nomeB) {
     if (!a || !b) return false;
     if (a.includes(b) || b.includes(a)) return true;
 
+    // No colégio, Geografia e Geography são disciplinas diferentes.
+    const aGeography = /\b(?:geography|ghy)\b/.test(a);
+    const bGeography = /\b(?:geography|ghy)\b/.test(b);
+    const aGeografia = /\bgeografia\b/.test(a) && !aGeography;
+    const bGeografia = /\bgeografia\b/.test(b) && !bGeography;
+    if ((aGeography && bGeografia) || (bGeography && aGeografia)) {
+        return false;
+    }
+
     const grupos = [
         ["red", "redacao", "producao textual"],
         ["lp", "port", "portugues", "lingua portuguesa"],
         ["mat", "matematica"],
         ["cie", "ciencias"],
-        ["geo", "geografia", "geography"],
+        ["geografia"],
+        ["geography", "ghy"],
         ["his", "historia"],
         ["ing", "ingles", "english"],
         ["esp", "espanhol", "spanish"],
