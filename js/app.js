@@ -5541,7 +5541,7 @@ async function analisarHorarioOficial() {
         return;
     }
 
-    const turma = identificarTurmaPrincipalDoAluno();
+    const turma = identificarTurmaCompletaParaHorario();
     if (!turma) {
         statusHorarioOficial.textContent =
             "Conecte o Classroom primeiro para a Maltéria identificar a turma do aluno.";
@@ -5592,7 +5592,7 @@ async function analisarHorarioOficial() {
         statusHorarioOficial.textContent = traduzirErroDaInteligencia(erro.message);
     } finally {
         botaoAnalisarHorarioOficial.disabled = false;
-        botaoAnalisarHorarioOficial.textContent = "Ler horário oficial";
+        botaoAnalisarHorarioOficial.textContent = "Usar esta imagem como horário oficial";
     }
 }
 
@@ -5757,7 +5757,18 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
 
         // O relatório não tem permissão para inventar ou reescrever a grade.
         // Somente o leitor explícito da foto/PDF oficial salva o horário.
-        const horarioConfirmado = horarioSalvo;
+        const horarioLidoDoClassroom =
+            contextoClassroom.documentoHorarioEncontrado === true &&
+            dados.horarioEncontrado === true
+                ? normalizarHorarioSemanalConfiavel(dados.horarioSemanal)
+                : [];
+        const horarioConfirmado = horarioSalvo.length
+            ? horarioSalvo
+            : horarioLidoDoClassroom;
+
+        if (!horarioSalvo.length && horarioLidoDoClassroom.length) {
+            salvarHorarioSemanalResponsavel(horarioLidoDoClassroom);
+        }
 
         // Na primeira leitura, o documento oficial pode ter acabado de ser
         // interpretado pela IA. Recalcula então os avisos "para casa" e
@@ -5969,6 +5980,27 @@ function identificarTurmaPrincipalDoAluno() {
     return Array.from(contagem.entries()).sort(function (a, b) {
         return b[1] - a[1];
     })[0]?.[0] || "";
+}
+
+function identificarTurmaCompletaParaHorario() {
+    const letra = identificarTurmaPrincipalDoAluno();
+    const filho = filhoSelecionadoAtual();
+    const fontes = [
+        filho?.turma,
+        usuarioAtual?.turma,
+        ...turmasClassroom.map(function (turma) {
+            return (turma.name || "") + " " + (turma.section || "");
+        })
+    ].filter(Boolean);
+
+    for (const fonte of fontes) {
+        const texto = normalizarPesquisa(fonte);
+        const serie = texto.match(/\b(\d{1,2})\s*(?:ano|o)?\b/);
+        const letraDaFonte = extrairLetraDaTurma(fonte) || letra;
+        if (serie && letraDaFonte) return serie[1] + letraDaFonte;
+    }
+
+    return letra;
 }
 
 function nomePertenceATurma(texto, turmaPrincipal) {
@@ -6407,6 +6439,7 @@ async function obterContextoResponsavelClassroom(dataInicio, dataAlvo, horarioSe
     let texto = "";
     const anexosHorario = [];
     const entregas = [];
+    let documentoHorarioEncontrado = false;
 
     for (const turma of turmasClassroom.slice(0, 20)) {
         try {
@@ -6434,6 +6467,7 @@ async function obterContextoResponsavelClassroom(dataInicio, dataAlvo, horarioSe
                 });
 
                 if (pareceHorario) {
+                    documentoHorarioEncontrado = true;
                     texto +=
                         "\nPOSSÍVEL HORÁRIO DA TURMA " + turma.name +
                         "\nTítulo: " + (material.title || "") +
@@ -6520,7 +6554,8 @@ async function obterContextoResponsavelClassroom(dataInicio, dataAlvo, horarioSe
 
     return {
         texto: texto || "Nenhum horário ou atividade adicional foi localizado no Classroom.",
-        entregas: entregas
+        entregas: entregas,
+        documentoHorarioEncontrado: documentoHorarioEncontrado
     };
 }
 
