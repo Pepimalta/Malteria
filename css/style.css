@@ -74,7 +74,7 @@ body {
 }
 
 .texto-correcao-dever {
-    line-height: 4.7;
+    line-height: 1.7;
 }
 
 .aviso-correcao-dever {
@@ -238,7 +238,7 @@ body {
 .documento-legal header p,
 .documento-legal section p,
 .documento-legal li {
-    line-height: 1.7;
+    line-height: 4.7;
 }
 
 .documento-legal header p {
@@ -6185,4 +6185,38 @@ body {
     padding-left: 12px;
     border-left: 3px solid #38c98c;
     color: #536178;
+}
+
+.configuracao-horario-oficial {
+    margin-top: 16px;
+    border: 1px solid #d9ccff;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.76);
+    overflow: hidden;
+}
+
+.configuracao-horario-oficial summary {
+    padding: 15px 18px;
+    color: #4930c8;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.conteudo-configuracao-horario {
+    display: grid;
+    gap: 12px;
+    padding: 0 18px 18px;
+}
+
+.conteudo-configuracao-horario p {
+    margin: 0;
+    line-height: 1.55;
+}
+
+.conteudo-configuracao-horario input[type="file"] {
+    width: 100%;
+    padding: 12px;
+    border: 2px dashed #cbb8ff;
+    border-radius: 13px;
+    background: #fff;
 }
