@@ -74,7 +74,7 @@ body {
 }
 
 .texto-correcao-dever {
-    line-height: 1.7;
+    line-height: 4.7;
 }
 
 .aviso-correcao-dever {
@@ -238,7 +238,7 @@ body {
 .documento-legal header p,
 .documento-legal section p,
 .documento-legal li {
-    line-height: 4.7;
+    line-height: 1.7;
 }
 
 .documento-legal header p {
