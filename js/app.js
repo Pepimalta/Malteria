@@ -4410,7 +4410,7 @@ async function obterEventosAgenda(
 
     const calendarios = await buscarTodosOsItensDoGoogleAgenda(
         "https://www.googleapis.com/calendar/v3/users/me/calendarList" +
-        "?minAccessRole=reader&maxResults=250&showHidden=false"
+        "?minAccessRole=reader&maxResults=250&showHidden=true"
     );
 
     const fontes = [];
@@ -6257,6 +6257,45 @@ function nomesDeMateriaCompativeis(nomeA, nomeB) {
     });
 }
 
+function identificarMateriaDoEventoNoHorario(item, horarioSemanal) {
+    const materiasDoHorario = [];
+
+    (Array.isArray(horarioSemanal) ? horarioSemanal : []).forEach(function (entrada) {
+        (Array.isArray(entrada.aulas) ? entrada.aulas : []).forEach(function (materia) {
+            if (!materiasDoHorario.some(function (existente) {
+                return nomesDeMateriaCompativeis(existente, materia);
+            })) {
+                materiasDoHorario.push(materia);
+            }
+        });
+    });
+
+    // Vários calendários escolares chegam com um e-mail técnico como nome.
+    // Nesses casos a disciplina aparece no título (por exemplo, RED 6B,
+    // LP 6B ou MAT 6B). O horário oficial apenas fornece a lista de matérias;
+    // não usamos a frequência da Agenda para inventar a grade.
+    const fontes = [
+        item?.materia,
+        item?.calendarioOriginal,
+        item?.titulo,
+        item?.descricao
+    ].filter(Boolean);
+
+    for (const fonte of fontes) {
+        const materiaEncontrada = materiasDoHorario.find(function (materia) {
+            return nomesDeMateriaCompativeis(materia, fonte);
+        });
+        if (materiaEncontrada) return materiaEncontrada;
+    }
+
+    const materiaInformada = String(item?.materia || "").trim();
+    if (normalizarPesquisa(materiaInformada) !== "agenda escolar") {
+        return materiaInformada;
+    }
+
+    return "";
+}
+
 function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
     const textoOriginal = (item.titulo || "") + " " + (item.descricao || "");
     const texto = normalizarPesquisa(textoOriginal);
@@ -6314,7 +6353,8 @@ function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
         (mencionaProximaAula || ehDeverParaProximaAula) &&
         Array.isArray(horarioSemanal)
     ) {
-        const materia = item.materia || item.calendarioOriginal || "";
+        const materia = identificarMateriaDoEventoNoHorario(item, horarioSemanal) ||
+            item.materia || item.calendarioOriginal || "";
         const proximasDatas = horarioSemanal.filter(function (entrada) {
             return (entrada.aulas || []).some(function (aula) {
                 return nomesDeMateriaCompativeis(aula, materia);
@@ -6341,8 +6381,12 @@ function criarEntregaLocalDaAgenda(item, dataAlvo, horarioSemanal) {
     const calculo = calcularEntregaLocalDaAgenda(item, horarioSemanal);
     if (!calculo || calculo.data !== dataAlvo) return null;
 
+    const materiaIdentificada =
+        identificarMateriaDoEventoNoHorario(item, horarioSemanal) ||
+        item.materia || item.calendarioOriginal || "Matéria a confirmar";
+
     return {
-        materia: item.materia || item.calendarioOriginal || "Matéria a confirmar",
+        materia: materiaIdentificada,
         tipo: identificarTipoAtividade({
             title: item.titulo || "",
             description: item.descricao || "",
