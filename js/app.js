@@ -6069,7 +6069,8 @@ function nomesDeMateriaCompativeis(nomeA, nomeB) {
     if (a.includes(b) || b.includes(a)) return true;
 
     const grupos = [
-        ["red", "redacao", "portugues", "lingua portuguesa"],
+        ["red", "redacao", "producao textual"],
+        ["lp", "port", "portugues", "lingua portuguesa"],
         ["mat", "matematica"],
         ["cie", "ciencias"],
         ["geo", "geografia", "geography"],
@@ -6178,9 +6179,11 @@ function criarEntregaLocalDaAgenda(item, dataAlvo, horarioSemanal) {
             materials: []
         }),
         titulo: item.titulo || "Tarefa registrada na Agenda",
+        descricao: item.descricao || "",
         dataEntrega: dataAlvo,
         dataRegistro: dataParaCampo(new Date(item.data)),
         origem: "Google Agenda",
+        link: item.link || "",
         justificativa: calculo.regra,
         prioridade: "Alta"
     };
@@ -6347,9 +6350,11 @@ async function obterContextoResponsavelClassroom(dataInicio, dataAlvo, horarioSe
                         materia: turma.name,
                         tipo: identificarTipoAtividade(atividade),
                         titulo: atividade.title || "Atividade do Classroom",
+                        descricao: atividade.description || "",
                         dataEntrega: dataAlvo,
                         dataRegistro: dataCriacao,
                         origem: "Google Classroom",
+                        link: atividade.alternateLink || "",
                         justificativa: calculoLocal.regra,
                         prioridade: "Alta"
                     });
@@ -6440,14 +6445,37 @@ function desenharRelatorioResponsavel(
             <table class="tabela-pesquisa tabela-entregas-responsavel">
                 <thead><tr><th>Matéria</th><th>Tipo</th><th>O que fazer</th><th>Quando foi avisado</th><th>Prioridade</th></tr></thead>
                 <tbody>
-                    ${entregas.length ? entregas.map(function (item) {
+                    ${entregas.length ? entregas.map(function (item, indice) {
+                        const idDetalhes = "detalhes-entrega-" + indice;
+                        const descricaoCompleta = item.descricao || item.titulo ||
+                            "O registro não trouxe uma descrição adicional. Confira a fonte abaixo.";
                         return `
-                            <tr>
+                            <tr class="linha-entrega-clicavel"
+                                tabindex="0"
+                                role="button"
+                                aria-expanded="false"
+                                aria-controls="${idDetalhes}"
+                                data-alvo-detalhes="${idDetalhes}">
                                 <td>${protegerTexto(item.materia || "A confirmar")}</td>
                                 <td><span class="etiqueta-tipo-entrega">${protegerTexto(item.tipo || "Tarefa")}</span></td>
-                                <td><strong>${protegerTexto(item.titulo || "")}</strong><small>${protegerTexto(item.justificativa || "")}</small></td>
+                                <td>
+                                    <strong>${protegerTexto(item.titulo || "")}</strong>
+                                    <small>${protegerTexto(item.justificativa || "")}</small>
+                                    <span class="comando-ver-dever">Ver atividade completa ▾</span>
+                                </td>
                                 <td>${protegerTexto(item.dataRegistro || "Não informada")}</td>
                                 <td>${protegerTexto(item.prioridade || "Normal")}</td>
+                            </tr>
+                            <tr id="${idDetalhes}" class="linha-detalhes-entrega" hidden>
+                                <td colspan="5">
+                                    <div class="conteudo-detalhes-entrega">
+                                        <h4>O que precisa ser feito</h4>
+                                        <p>${protegerTexto(descricaoCompleta).replace(/\n/g, "<br>")}</p>
+                                        <p><strong>Como a data foi calculada:</strong> ${protegerTexto(item.justificativa || "Prazo informado pela fonte escolar.")}</p>
+                                        <p><strong>Fonte:</strong> ${protegerTexto(item.origem || "Agenda ou Classroom")}</p>
+                                        ${item.link ? `<a href="${protegerTexto(item.link)}" target="_blank" rel="noopener noreferrer">Abrir registro original</a>` : ""}
+                                    </div>
+                                </td>
                             </tr>
                         `;
                     }).join("") : '<tr><td colspan="5">Nenhuma entrega confirmada para essa data.</td></tr>'}
@@ -6455,14 +6483,16 @@ function desenharRelatorioResponsavel(
             </table>
         </div>
 
-        <section class="avisos-relatorio-responsavel">
-            <h3>📢 Avisos</h3>
-            ${avisos.length ? `
-                <ul>${avisos.map(function (aviso) {
-                    return `<li>${protegerTexto(aviso)}</li>`;
-                }).join("")}</ul>
-            ` : '<p>Nenhum aviso escolar encontrado nas semanas consultadas.</p>'}
-        </section>
+        <details class="detalhes-finais avisos-relatorio-responsavel">
+            <summary>📢 Ver avisos escolares (${avisos.length})</summary>
+            <div class="conteudo-avisos-relatorio">
+                ${avisos.length ? `
+                    <ul>${avisos.map(function (aviso) {
+                        return `<li>${protegerTexto(aviso)}</li>`;
+                    }).join("")}</ul>
+                ` : '<p>Nenhum aviso escolar encontrado nas semanas consultadas.</p>'}
+            </div>
+        </details>
 
         ${horario.length ? `
             <details class="detalhes-finais horario-semanal-responsavel">
@@ -6475,6 +6505,30 @@ function desenharRelatorioResponsavel(
             </details>
         ` : ""}
     `;
+
+    area.querySelectorAll(".linha-entrega-clicavel").forEach(function (linha) {
+        function alternarDetalhes() {
+            const detalhes = area.querySelector("#" + linha.dataset.alvoDetalhes);
+            if (!detalhes) return;
+            const vaiAbrir = detalhes.hidden;
+            detalhes.hidden = !vaiAbrir;
+            linha.setAttribute("aria-expanded", String(vaiAbrir));
+            const comando = linha.querySelector(".comando-ver-dever");
+            if (comando) {
+                comando.textContent = vaiAbrir
+                    ? "Ocultar atividade ▴"
+                    : "Ver atividade completa ▾";
+            }
+        }
+
+        linha.addEventListener("click", alternarDetalhes);
+        linha.addEventListener("keydown", function (evento) {
+            if (evento.key === "Enter" || evento.key === " ") {
+                evento.preventDefault();
+                alternarDetalhes();
+            }
+        });
+    });
 
     area.classList.remove("escondido");
 }
