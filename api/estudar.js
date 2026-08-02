@@ -445,6 +445,9 @@ REGRAS DE INTERPRETAÇÃO:
 - Não inclua compromissos pessoais ou eventos sem relação escolar.
 - Informe a data original do registro e explique brevemente como a data de
   entrega foi calculada.
+- Em cada entrega, copie para "descricao" a orientação completa encontrada
+  no registro: páginas, números dos exercícios, folha, livro, material e tudo
+  o que o aluno precisa fazer. Nunca responda apenas que "existe um dever".
 - Leia integralmente qualquer PDF de horário anexado.
 - Se encontrar o horário, devolva-o organizado por dia da semana.
 - Responda em português do Brasil, de maneira formal, objetiva e sem alarmismo.
@@ -492,6 +495,7 @@ Responda somente em JSON válido.
                         materia: { type: "STRING" },
                         tipo: { type: "STRING" },
                         titulo: { type: "STRING" },
+                        descricao: { type: "STRING" },
                         dataEntrega: { type: "STRING" },
                         dataRegistro: { type: "STRING" },
                         origem: { type: "STRING" },
@@ -499,7 +503,7 @@ Responda somente em JSON válido.
                         prioridade: { type: "STRING" }
                     },
                     required: [
-                        "materia", "tipo", "titulo", "dataEntrega",
+                        "materia", "tipo", "titulo", "descricao", "dataEntrega",
                         "dataRegistro", "origem", "justificativa", "prioridade"
                     ]
                 }
