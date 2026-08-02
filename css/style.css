@@ -3688,6 +3688,47 @@ body {
     display: block;
 }
 
+.linha-entrega-clicavel {
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.linha-entrega-clicavel:hover,
+.linha-entrega-clicavel:focus-visible,
+.linha-entrega-clicavel[aria-expanded="true"] {
+    background: #f0f8ff;
+    outline: none;
+}
+
+.comando-ver-dever {
+    display: inline-block;
+    margin-top: 9px;
+    color: var(--roxo);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.linha-detalhes-entrega td {
+    padding: 0 14px 14px;
+    background: #f7fbff;
+}
+
+.conteudo-detalhes-entrega {
+    border: 1px solid #b9dfff;
+    border-radius: 14px;
+    padding: 15px 17px;
+    background: #fff;
+}
+
+.conteudo-detalhes-entrega h4,
+.conteudo-detalhes-entrega p {
+    margin: 0 0 9px;
+}
+
+.conteudo-detalhes-entrega p {
+    line-height: 1.55;
+}
+
 .tabela-entregas-responsavel td small {
     margin-top: 5px;
     color: var(--cinza);
@@ -3704,11 +3745,24 @@ body {
     font-weight: 800;
 }
 
-.avisos-relatorio-responsavel {
+.detalhes-finais.avisos-relatorio-responsavel {
     border-left: 4px solid #e8b500;
     border-radius: 0 14px 14px 0;
-    padding: 15px 17px;
+    padding: 0;
     background: #fff9df;
+    margin: 18px 0;
+}
+
+.avisos-relatorio-responsavel > summary {
+    padding: 15px 17px;
+    color: #6c5610;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.conteudo-avisos-relatorio {
+    border-top: 1px solid #f0d56e;
+    padding: 15px 17px;
 }
 
 .avisos-relatorio-responsavel h3 {
