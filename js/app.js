@@ -4362,6 +4362,32 @@ function tipoCombinaComFiltro(
     return false;
 }
 
+async function buscarTodosOsItensDoGoogleAgenda(enderecoBase) {
+    const itens = [];
+    let tokenDaPagina = "";
+
+    do {
+        const endereco = new URL(enderecoBase);
+        if (tokenDaPagina) endereco.searchParams.set("pageToken", tokenDaPagina);
+
+        const resposta = await fetch(endereco.toString(), {
+            headers: { Authorization: "Bearer " + tokenClassroom }
+        });
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(
+                dados.error?.message || "Não foi possível consultar o Google Agenda."
+            );
+        }
+
+        itens.push(...(dados.items || []));
+        tokenDaPagina = dados.nextPageToken || "";
+    } while (tokenDaPagina);
+
+    return itens;
+}
+
 async function obterEventosAgenda(
     dataInicial,
     dataFinal
@@ -4379,35 +4405,15 @@ async function obterEventosAgenda(
             dataFinal + "T23:59:59"
         ).toISOString();
 
-    const listaResposta = await fetch(
-        "https://www.googleapis.com/" +
-        "calendar/v3/users/me/calendarList" +
-        "?minAccessRole=reader",
-        {
-            headers: {
-                Authorization:
-                    "Bearer " + tokenClassroom
-            }
-        }
+    const calendarios = await buscarTodosOsItensDoGoogleAgenda(
+        "https://www.googleapis.com/calendar/v3/users/me/calendarList" +
+        "?minAccessRole=reader&maxResults=250&showHidden=false"
     );
-
-    const listaDados =
-        await listaResposta.json();
-
-    if (!listaResposta.ok) {
-        throw new Error(
-            listaDados.error?.message ||
-            "Não foi possível abrir o Google Agenda."
-        );
-    }
-
-    const calendarios =
-        listaDados.items || [];
 
     const fontes = [];
 
     for (
-        const calendario of calendarios.slice(0, 20)
+        const calendario of calendarios
     ) {
         const endereco =
             "https://www.googleapis.com/calendar/v3/calendars/" +
@@ -4421,29 +4427,19 @@ async function obterEventosAgenda(
             "&timeMax=" +
             encodeURIComponent(fim);
 
-        const resposta = await fetch(
-            endereco,
-            {
-                headers: {
-                    Authorization:
-                        "Bearer " +
-                        tokenClassroom
-                }
-            }
-        );
-
-        const dados =
-            await resposta.json();
-
-        if (!resposta.ok) {
+        let eventosDoCalendario = [];
+        try {
+            eventosDoCalendario = await buscarTodosOsItensDoGoogleAgenda(endereco);
+        } catch (erro) {
             console.warn(
                 "Agenda não carregada:",
-                calendario.summary
+                calendario.summary,
+                erro
             );
             continue;
         }
 
-        (dados.items || []).forEach(
+        eventosDoCalendario.forEach(
             function (evento) {
                 const inicioEvento =
                     evento.start?.dateTime ||
@@ -5580,16 +5576,23 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
 
     try {
         const agenda = await obterEventosAgenda(dataInicio, dataFimConsulta);
-        const eventosEscolares = agenda.fontes.filter(eventoDaAgendaPareceEscolar);
+        const turmaPrincipal = identificarTurmaPrincipalDoAluno();
+        const eventosEscolares = agenda.fontes
+            .filter(eventoDaAgendaPareceEscolar)
+            .filter(function (evento) {
+                return eventoPertenceATurma(evento, turmaPrincipal);
+            });
         const horarioSalvo = lerHorarioSemanalResponsavel();
+        const horarioInferido = inferirHorarioPelosEventos(eventosEscolares);
+        const horarioBase = mesclarHorariosSemanais(horarioSalvo, horarioInferido);
         const contextoClassroom = await obterContextoResponsavelClassroom(
             dataInicio,
             dataFimConsulta,
-            horarioSalvo
+            horarioBase
         );
         const entregasLocaisAgenda = eventosEscolares
             .map(function (item) {
-                return criarEntregaLocalDaAgenda(item, dataAlvo, horarioSalvo);
+                return criarEntregaLocalDaAgenda(item, dataAlvo, horarioBase);
             })
             .filter(Boolean);
         const entregasLocais = entregasLocaisAgenda.concat(
@@ -5618,7 +5621,9 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
             );
         }).join("\n\n");
 
-        const turmasOficiais = turmasClassroom.map(function (turma) {
+        const turmasOficiais = turmasClassroom.filter(function (turma) {
+            return !turmaPrincipal || nomePertenceATurma(turma.name, turmaPrincipal);
+        }).map(function (turma) {
             return turma.name + (turma.section ? " — " + turma.section : "");
         }).join(" | ");
 
@@ -5643,6 +5648,7 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
                     (conteudoAgenda || "Nenhum registro escolar encontrado.") +
                     "\n\n=== TURMAS OFICIAIS DO CLASSROOM ===\n" +
                     (turmasOficiais || "Nenhuma turma oficial carregada.") +
+                    "\nTurma principal identificada: " + (turmaPrincipal || "não identificada") +
                     "\n\n=== CLASSROOM E HORÁRIO ===\n" +
                     contextoClassroom.texto +
                     "\n\n=== ENTREGAS CONFIRMADAS PELO CÁLCULO LOCAL ===\n" +
@@ -5650,8 +5656,8 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
                         ? JSON.stringify(entregasLocais)
                         : "Nenhuma entrega pôde ser confirmada automaticamente.") +
                     "\n\n=== HORÁRIO CONFIRMADO EM CONSULTA ANTERIOR ===\n" +
-                    (horarioSalvo.length
-                        ? JSON.stringify(horarioSalvo)
+                    (horarioBase.length
+                        ? JSON.stringify(horarioBase)
                         : "Nenhum horário anterior salvo.")
                 ).slice(0, 60000),
                 arquivos: arquivosPdfParaIA
@@ -5668,11 +5674,25 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
         };
 
         incorporarEntregasLocaisNoRelatorio(dados, entregasLocais);
+
+        // O horário reconstruído no navegador vem das turmas e calendários
+        // realmente conectados e prevalece sobre uma resposta ambígua da IA.
+        if (horarioBase.length) {
+            dados.horarioEncontrado = true;
+            dados.horarioSemanal = horarioBase;
+        }
+
         normalizarRelatorioEscolar(dados, {
             dataAlvo: dataAlvo,
-            horarioSalvo: horarioSalvo,
+            horarioSalvo: horarioBase,
             avisosLocais: avisosLocais
         });
+
+        if (horarioBase.length) {
+            dados.horarioEncontrado = true;
+            dados.horarioSemanal = horarioBase;
+            salvarHorarioSemanalResponsavel(horarioBase);
+        }
 
         if (
             dados.horarioEncontrado === true &&
@@ -5812,6 +5832,121 @@ function textoPareceAvisoInstitucional(texto) {
     ].some(function (termo) {
         return normalizado.includes(termo);
     });
+}
+
+function extrairLetraDaTurma(texto) {
+    const valor = normalizarPesquisa(texto || "");
+    const correspondencia = valor.match(/\bturma\s*([a-z])\b/) ||
+        valor.match(/\b\d{1,2}\s*(?:ano\s*)?([a-z])\b/);
+    return correspondencia ? correspondencia[1].toUpperCase() : "";
+}
+
+function identificarTurmaPrincipalDoAluno() {
+    const filho = filhoSelecionadoAtual();
+    const informada = extrairLetraDaTurma(
+        filho?.turma || usuarioAtual?.turma || ""
+    );
+    if (informada) return informada;
+
+    const contagem = new Map();
+    turmasClassroom.forEach(function (turma) {
+        const letra = extrairLetraDaTurma(
+            (turma.name || "") + " " + (turma.section || "")
+        );
+        if (letra) contagem.set(letra, (contagem.get(letra) || 0) + 1);
+    });
+
+    return Array.from(contagem.entries()).sort(function (a, b) {
+        return b[1] - a[1];
+    })[0]?.[0] || "";
+}
+
+function nomePertenceATurma(texto, turmaPrincipal) {
+    if (!turmaPrincipal) return true;
+    const letra = extrairLetraDaTurma(texto);
+    return !letra || letra === turmaPrincipal;
+}
+
+function eventoPertenceATurma(evento, turmaPrincipal) {
+    return nomePertenceATurma([
+        evento.materia,
+        evento.calendarioOriginal,
+        evento.titulo
+    ].filter(Boolean).join(" "), turmaPrincipal);
+}
+
+function inferirHorarioPelosEventos(eventos) {
+    const ocorrencias = new Map();
+
+    (eventos || []).forEach(function (evento) {
+        const materia = limparNomeDoCalendario(
+            evento.materia || evento.calendarioOriginal || "",
+            evento.calendarioId || ""
+        ).trim();
+        if (!materia || !evento.data) return;
+
+        const dia = new Date(evento.data).getDay();
+        if (dia === 0 || dia === 6) return;
+
+        const chave = normalizarPesquisa(materia);
+        if (!ocorrencias.has(chave)) {
+            ocorrencias.set(chave, { materia: materia, dias: new Map() });
+        }
+        const registro = ocorrencias.get(chave);
+        registro.dias.set(dia, (registro.dias.get(dia) || 0) + 1);
+    });
+
+    const nomesDias = [
+        "domingo", "segunda-feira", "terça-feira", "quarta-feira",
+        "quinta-feira", "sexta-feira", "sábado"
+    ];
+    const horarioPorDia = new Map();
+
+    ocorrencias.forEach(function (registro) {
+        const diasOrdenados = Array.from(registro.dias.entries())
+            .sort(function (a, b) { return b[1] - a[1]; });
+
+        diasOrdenados.forEach(function (item) {
+            const dia = item[0];
+            if (!horarioPorDia.has(dia)) horarioPorDia.set(dia, []);
+            const aulas = horarioPorDia.get(dia);
+            if (!aulas.some(function (aula) {
+                return nomesDeMateriaCompativeis(aula, registro.materia);
+            })) {
+                aulas.push(registro.materia);
+            }
+        });
+    });
+
+    return Array.from(horarioPorDia.entries())
+        .sort(function (a, b) { return a[0] - b[0]; })
+        .map(function (item) {
+            return { dia: nomesDias[item[0]], aulas: item[1] };
+        });
+}
+
+function mesclarHorariosSemanais(principal, complementar) {
+    const porDia = new Map();
+
+    [principal, complementar].forEach(function (horario) {
+        (Array.isArray(horario) ? horario : []).forEach(function (entrada) {
+            const indice = indiceDoDiaDaSemana(entrada.dia || "");
+            if (indice < 1 || indice > 5) return;
+            if (!porDia.has(indice)) {
+                porDia.set(indice, { dia: entrada.dia, aulas: [] });
+            }
+            const destino = porDia.get(indice);
+            (entrada.aulas || []).forEach(function (aula) {
+                if (!destino.aulas.some(function (existente) {
+                    return nomesDeMateriaCompativeis(existente, aula);
+                })) destino.aulas.push(aula);
+            });
+        });
+    });
+
+    return Array.from(porDia.entries())
+        .sort(function (a, b) { return a[0] - b[0]; })
+        .map(function (item) { return item[1]; });
 }
 
 function dataEhFimDeSemana(dataCampo) {
@@ -6000,7 +6135,14 @@ function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
         }
     }
 
-    if (!entrega && /\bproxima aula\b/.test(texto) && Array.isArray(horarioSemanal)) {
+    const mencionaProximaAula = /\bproxima aula\b/.test(texto);
+    const ehDeverParaProximaAula = /\b(?:para\s+casa|dever(?:\s+de\s+casa)?|tarefa(?:\s+(?:para|de)\s+casa)?|exercicios?|lista(?:\s+de\s+exercicios?)?|paginas?|folhas?)\b/.test(texto);
+
+    if (
+        !entrega &&
+        (mencionaProximaAula || ehDeverParaProximaAula) &&
+        Array.isArray(horarioSemanal)
+    ) {
         const materia = item.materia || item.calendarioOriginal || "";
         const proximasDatas = horarioSemanal.filter(function (entrada) {
             return (entrada.aulas || []).some(function (aula) {
@@ -6015,7 +6157,9 @@ function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
 
         if (proximasDatas.length) {
             entrega = proximasDatas[0];
-            regra = "O aviso diz ‘próxima aula’ e foi cruzado com o horário salvo.";
+            regra = mencionaProximaAula
+                ? "O aviso diz 'próxima aula' e foi cruzado com o horário semanal."
+                : "O registro indica dever para casa e foi associado à próxima aula da matéria.";
         }
     }
 
@@ -6101,6 +6245,10 @@ function pistaLocalDeEntrega(item) {
 
     if (/\bproxima aula\b/.test(texto)) {
         return "próxima aula; cruzar obrigatoriamente com o horário semanal";
+    }
+
+    if (/\b(?:para\s+casa|dever(?:\s+de\s+casa)?|tarefa(?:\s+(?:para|de)\s+casa)?|exercicios?|lista(?:\s+de\s+exercicios?)?|paginas?|folhas?)\b/.test(texto)) {
+        return "atividade para casa; calcular a entrega pela próxima aula da matéria";
     }
 
     const dataEscrita = texto.match(
