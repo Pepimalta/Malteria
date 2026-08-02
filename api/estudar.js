@@ -60,6 +60,7 @@ export default async function handler(req, res) {
         const {
             tipo,
             materia,
+            turma,
             titulo,
             pergunta,
             formato,
@@ -89,6 +90,19 @@ export default async function handler(req, res) {
 
             return await avaliarNivelEvolucao(res, {
                 objetivo,
+                arquivos
+            });
+        }
+
+        if (tipo === "interpretar_horario") {
+            if (!Array.isArray(arquivos) || arquivos.length === 0) {
+                return res.status(400).json({
+                    erro: "Envie a foto ou o PDF oficial do horário."
+                });
+            }
+
+            return await interpretarHorarioOficial(res, {
+                turma,
                 arquivos
             });
         }
@@ -388,6 +402,14 @@ exatamente na data-alvo. Os professores podem ter registrado a orientação
 semanas antes da data real.
 
 REGRAS DE INTERPRETAÇÃO:
+- O PDF ou a imagem do horário oficial é a única fonte autorizada para montar
+  a grade semanal. Nunca deduza o horário pela frequência ou pela data dos
+  eventos da Agenda.
+- Leia somente a coluna da turma oficial indicada nos dados do Classroom.
+  Não copie aulas das colunas de outras turmas.
+- "Agenda escolar", "Recreio" e "Intervalo" são rótulos ou fontes, não matérias.
+- Geografia (G) e Geography (GHY) são disciplinas diferentes. Nunca una as duas
+  em "Geografia/Geography" nem use uma para completar a outra.
 - Antes de procurar tarefas, determine o dia da semana da data-alvo e monte
   a lista completa das matérias previstas naquele dia usando o horário encontrado.
 - Se a data-alvo cair em sábado ou domingo, não invente matérias nem aulas regulares.
@@ -520,6 +542,78 @@ Responda somente em JSON válido.
             "materiasDoDia",
             "entregas",
             "avisos"
+        ]
+    };
+
+    const resultado = await chamarGemini(
+        instrucao,
+        schema,
+        prepararPartesDeArquivos(dados.arquivos)
+    );
+
+    return res.status(200).json(resultado);
+}
+
+async function interpretarHorarioOficial(res, dados) {
+    const turmaSolicitada = String(dados.turma || "").trim().toUpperCase();
+    if (!turmaSolicitada) {
+        return res.status(400).json({
+            erro: "Não foi possível identificar a turma conectada ao Classroom."
+        });
+    }
+
+    const instrucao = `
+Você é a leitora de documentos escolares da Maltéria.
+
+Leia a foto ou o PDF anexado, que contém o horário semanal oficial da escola.
+TURMA SOLICITADA: ${turmaSolicitada}
+
+REGRAS OBRIGATÓRIAS:
+- Localize exatamente a coluna da turma ${turmaSolicitada}.
+- Leia somente essa coluna. Nunca misture aulas de A, C, D, E, F ou qualquer
+  outra turma com a coluna solicitada.
+- Organize de segunda-feira a sexta-feira.
+- Mantenha a ordem em que as aulas aparecem no dia.
+- Pode remover repetições da mesma disciplina no mesmo dia, pois este resultado
+  será usado para saber em quais dias cada matéria ocorre.
+- Recreio e intervalo não são matérias.
+- "Agenda escolar" não é matéria.
+- Geografia, normalmente abreviada como G, e Geography, normalmente abreviada
+  como GHY, são matérias diferentes. Nunca una nem traduza uma como a outra.
+- Só expanda uma sigla quando o próprio documento permitir identificá-la com
+  segurança. Não invente nomes.
+- Se a coluna ${turmaSolicitada} não estiver claramente visível, responda
+  horarioEncontrado=false e explique o problema em observacao.
+- Não use conhecimento externo e não complete partes ilegíveis por adivinhação.
+- Responda em português do Brasil e somente em JSON válido.
+`;
+
+    const schema = {
+        type: "OBJECT",
+        properties: {
+            horarioEncontrado: { type: "BOOLEAN" },
+            turmaIdentificada: { type: "STRING" },
+            horarioSemanal: {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        dia: { type: "STRING" },
+                        aulas: {
+                            type: "ARRAY",
+                            items: { type: "STRING" }
+                        }
+                    },
+                    required: ["dia", "aulas"]
+                }
+            },
+            observacao: { type: "STRING" }
+        },
+        required: [
+            "horarioEncontrado",
+            "turmaIdentificada",
+            "horarioSemanal",
+            "observacao"
         ]
     };
 
