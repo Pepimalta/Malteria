@@ -5755,12 +5755,9 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
             horarioEncontrado: horarioSalvo.length > 0
         };
 
-        const horarioLidoAgora = dados.horarioEncontrado === true
-            ? normalizarHorarioSemanalConfiavel(dados.horarioSemanal)
-            : [];
-        const horarioConfirmado = horarioLidoAgora.length
-            ? horarioLidoAgora
-            : horarioSalvo;
+        // O relatório não tem permissão para inventar ou reescrever a grade.
+        // Somente o leitor explícito da foto/PDF oficial salva o horário.
+        const horarioConfirmado = horarioSalvo;
 
         // Na primeira leitura, o documento oficial pode ter acabado de ser
         // interpretado pela IA. Recalcula então os avisos "para casa" e
@@ -5784,10 +5781,6 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
             horarioSalvo: horarioConfirmado,
             avisosLocais: avisosLocais
         });
-
-        if (horarioConfirmado.length) {
-            salvarHorarioSemanalResponsavel(horarioConfirmado);
-        }
 
         desenharRelatorioResponsavel(
             dados,
@@ -5873,8 +5866,9 @@ function chaveHorarioSemanalResponsavel() {
         filho?.email || usuarioAtual?.email || "aluno-atual"
     );
     const conta = normalizarEmail(usuarioAtual?.email || "sem-conta");
-    // v2 ignora grades antigas que foram estimadas incorretamente pela Agenda.
-    return "malteriaHorarioSemanal:v2:" + conta + ":" + identificador;
+    // v3 ignora grades que uma versão anterior permitia que o relatório
+    // reescrevesse. Agora somente a leitura explícita do PDF/foto pode salvar.
+    return "malteriaHorarioSemanal:v3:" + conta + ":" + identificador;
 }
 
 function lerHorarioSemanalResponsavel() {
@@ -6182,7 +6176,6 @@ function nomesDeMateriaCompativeis(nomeA, nomeB) {
     const a = normalizarPesquisa(nomeA || "");
     const b = normalizarPesquisa(nomeB || "");
     if (!a || !b) return false;
-    if (a.includes(b) || b.includes(a)) return true;
 
     // No colégio, Geografia e Geography são disciplinas diferentes.
     const aGeography = /\b(?:geography|ghy)\b/.test(a);
@@ -6193,23 +6186,42 @@ function nomesDeMateriaCompativeis(nomeA, nomeB) {
         return false;
     }
 
+    if (a === b) return true;
+
+    function possuiTermo(texto, termo) {
+        const termoNormalizado = normalizarPesquisa(termo);
+        if (!termoNormalizado) return false;
+        // Siglas curtas precisam ser palavras completas. Assim IG não casa
+        // com "língua" e RED não casa com um pedaço de outra palavra.
+        if (termoNormalizado.length <= 3) {
+            return texto.split(/\s+/).includes(termoNormalizado);
+        }
+        return texto === termoNormalizado ||
+            texto.startsWith(termoNormalizado + " ") ||
+            texto.endsWith(" " + termoNormalizado) ||
+            texto.includes(" " + termoNormalizado + " ");
+    }
+
     const grupos = [
-        ["red", "redacao", "producao textual"],
+        ["red", "rd", "redacao", "producao textual"],
         ["lp", "port", "portugues", "lingua portuguesa"],
-        ["mat", "matematica"],
-        ["cie", "ciencias"],
-        ["geografia"],
+        ["m", "mat", "matematica"],
+        ["c", "cie", "ciencias"],
+        ["g", "geo", "geografia"],
         ["geography", "ghy"],
-        ["his", "historia"],
-        ["ing", "ingles", "english"],
+        ["h", "his", "historia"],
+        ["ig", "ing", "ingles", "english"],
         ["esp", "espanhol", "spanish"],
-        ["religiao", "ensino religioso"],
-        ["pensamento computacional", "computacao"]
+        ["er", "religiao", "ensino religioso"],
+        ["pec", "pensamento computacional", "computacao"],
+        ["art", "artes"],
+        ["ef", "educacao fisica"],
+        ["emo", "educacao emocional", "educacao socioemocional"]
     ];
 
     return grupos.some(function (grupo) {
-        return grupo.some(function (termo) { return a.includes(termo); }) &&
-            grupo.some(function (termo) { return b.includes(termo); });
+        return grupo.some(function (termo) { return possuiTermo(a, termo); }) &&
+            grupo.some(function (termo) { return possuiTermo(b, termo); });
     });
 }
 
@@ -6263,7 +6275,7 @@ function calcularEntregaLocalDaAgenda(item, horarioSemanal) {
     }
 
     const mencionaProximaAula = /\bproxima aula\b/.test(texto);
-    const ehDeverParaProximaAula = /\b(?:para\s+casa|dever(?:\s+de\s+casa)?|tarefa(?:\s+(?:para|de)\s+casa)?|exercicios?|lista(?:\s+de\s+exercicios?)?|paginas?|folhas?)\b/.test(texto);
+    const ehDeverParaProximaAula = /\b(?:para\s+casa|dever(?:\s+de\s+casa)?|tarefa(?:\s+(?:para|de)\s+casa)?|atividade\s+para\s+casa|exercicios?|lista(?:\s+de\s+exercicios?)?|paginas?|folhas?|fazer|responder|produzir|escrever|copiar|concluir)\b/.test(texto);
 
     if (
         !entrega &&
@@ -6620,16 +6632,6 @@ function desenharRelatorioResponsavel(
             </div>
         </details>
 
-        ${horario.length ? `
-            <details class="detalhes-finais horario-semanal-responsavel">
-                <summary>Ver horário semanal encontrado</summary>
-                <div class="grade-horario-responsavel">
-                    ${horario.map(function (dia) {
-                        return `<div><strong>${protegerTexto(dia.dia)}</strong><span>${protegerTexto((dia.aulas || []).join(" · "))}</span></div>`;
-                    }).join("")}
-                </div>
-            </details>
-        ` : ""}
     `;
 
     area.querySelectorAll(".linha-entrega-clicavel").forEach(function (linha) {
