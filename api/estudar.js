@@ -422,9 +422,10 @@ REGRAS DE INTERPRETAÇÃO:
   salvo quando o texto informar mês ou ano.
 - "Próxima aula" significa o próximo dia em que aquela matéria aparece no
   horário semanal encontrado.
-- Registros escritos como "Para casa", "Dever de casa" ou "Tarefa para casa",
-  mesmo sem uma data escrita, devem ser associados à próxima aula daquela
-  matéria quando o horário semanal tiver sido fornecido.
+- Registros escritos como "Para casa", "Dever", "Tarefa", "Exercícios",
+  "Lista", "Página" ou "Folha", mesmo sem uma data escrita, devem ser
+  associados à próxima aula daquela matéria quando o horário semanal
+  tiver sido fornecido. Não exija a expressão literal "para casa".
 - "Próxima aula de Ciências", por exemplo, deve usar o próximo dia de Ciências,
   mesmo que outras matérias tenham aula antes.
 - Se não houver horário confiável, não invente a data. Coloque a dúvida em avisos.
