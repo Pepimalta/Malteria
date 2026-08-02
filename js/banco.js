@@ -161,7 +161,7 @@
         if (!cliente) throw new Error("Banco de dados não configurado.");
         const origemAtual = window.location.protocol === "https:"
             ? window.location.origin
-            : "https://pepi-estudos.vercel.app";
+            : "https://malteria.vercel.app";
         const retorno = origemAtual.replace(/\/$/, "") + "/?recuperar-senha=1";
         const resposta = await cliente.auth.resetPasswordForEmail(email, {
             redirectTo: retorno
