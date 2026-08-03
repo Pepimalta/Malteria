@@ -72,6 +72,11 @@ export default async function handler(req, res) {
             dataReferencia,
             semPeriodoEspecifico,
             conteudo,
+            agenda,
+            classroom,
+            entregasConfirmadas,
+            horarioSemanal,
+            turmasOficiais,
             objetivo,
             arquivos,
             dificuldade,
@@ -107,7 +112,11 @@ export default async function handler(req, res) {
             });
         }
 
-        if (!materia || !conteudo) {
+        const relatorioComFontesSeparadas =
+            tipo === "relatorio_responsavel" &&
+            (agenda || classroom || entregasConfirmadas || horarioSemanal);
+
+        if (!materia || (!conteudo && !relatorioComFontesSeparadas)) {
             return res.status(400).json({
                 erro:
                     "A matéria e o conteúdo são obrigatórios."
@@ -124,6 +133,15 @@ export default async function handler(req, res) {
                 dataReferencia,
                 semPeriodoEspecifico,
                 conteudo: conteudoLimitado,
+                agenda: String(agenda || "").slice(0, 90000),
+                classroom: String(classroom || "").slice(0, 90000),
+                entregasConfirmadas: Array.isArray(entregasConfirmadas)
+                    ? entregasConfirmadas.slice(0, 200)
+                    : [],
+                horarioSemanal: Array.isArray(horarioSemanal)
+                    ? horarioSemanal.slice(0, 7)
+                    : [],
+                turmasOficiais: String(turmasOficiais || "").slice(0, 10000),
                 arquivos
             });
         }
@@ -385,6 +403,34 @@ async function criarRelatorioResponsavel(res, dados) {
         });
     }
 
+    const fontesSeparadas = `
+=== TURMAS OFICIAIS DO CLASSROOM ===
+${dados.turmasOficiais || "Nenhuma turma oficial carregada."}
+
+=== HORARIO SEMANAL CONFIRMADO ===
+${dados.horarioSemanal && dados.horarioSemanal.length
+    ? JSON.stringify(dados.horarioSemanal)
+    : "Nenhum horario semanal confirmado."}
+
+=== ENTREGAS JA CONFIRMADAS POR REGRAS DETERMINISTICAS ===
+${dados.entregasConfirmadas && dados.entregasConfirmadas.length
+    ? JSON.stringify(dados.entregasConfirmadas)
+    : "Nenhuma entrega confirmada automaticamente."}
+
+=== CLASSROOM: TODAS AS ATIVIDADES E MATERIAIS LIDOS ===
+${dados.classroom || "Nenhum registro do Classroom foi recebido."}
+
+=== AGENDA ESCOLAR: TODOS OS REGISTROS LIDOS ===
+${dados.agenda || "Nenhum registro da Agenda escolar foi recebido."}
+
+=== CONTEXTO COMPLEMENTAR ===
+${dados.conteudo || "Nenhum contexto complementar."}
+`;
+
+    // O relatorio usa as fontes separadas para impedir que a Agenda corte os
+    // registros do Classroom quando a janela consultada for grande.
+    dados.conteudo = fontesSeparadas;
+
     const instrucao = `
 Você é a assistente educacional da visão do responsável no aplicativo Maltéria.
 
@@ -475,6 +521,20 @@ REGRAS DE INTERPRETAÇÃO:
 - Responda em português do Brasil, de maneira formal, objetiva e sem alarmismo.
 - Não invente matérias, datas ou tarefas.
 
+AUDITORIA OBRIGATORIA ANTES DA RESPOSTA:
+- Conte separadamente todos os blocos "ATIVIDADE DO CLASSROOM",
+  "MATERIAL PUBLICADO NO CLASSROOM" e "REGISTRO DA AGENDA" recebidos.
+- Monte primeiro uma lista de TODOS os candidatos a tarefa e calcule a data de
+  entrega de cada um. Somente depois filtre pela data-alvo. Nao pare no primeiro.
+- O Classroom tem prioridade para enunciado, anexos e data oficial. A Agenda
+  complementa a busca, mas nunca pode apagar um dever encontrado no Classroom.
+- Toda atividade do Classroom cuja dueDate seja a data-alvo deve aparecer.
+- Material do Classroom com comandos como "para casa", "faca", "exercicios",
+  "pagina", "lista" ou "folha" e sem dueDate deve ser associado a proxima aula
+  da disciplina conforme o horario confirmado.
+- Preencha o objeto auditoria com as contagens realmente lidas. Se alguma fonte
+  estiver vazia ou truncada, explique isso em auditoria.observacao.
+
 Responda somente em JSON válido.
 `;
 
@@ -533,6 +593,23 @@ Responda somente em JSON válido.
             avisos: {
                 type: "ARRAY",
                 items: { type: "STRING" }
+            },
+            auditoria: {
+                type: "OBJECT",
+                properties: {
+                    atividadesClassroomLidas: { type: "INTEGER" },
+                    materiaisClassroomLidos: { type: "INTEGER" },
+                    registrosAgendaLidos: { type: "INTEGER" },
+                    candidatosAnalisados: { type: "INTEGER" },
+                    observacao: { type: "STRING" }
+                },
+                required: [
+                    "atividadesClassroomLidas",
+                    "materiaisClassroomLidos",
+                    "registrosAgendaLidos",
+                    "candidatosAnalisados",
+                    "observacao"
+                ]
             }
         },
         required: [
@@ -541,7 +618,8 @@ Responda somente em JSON válido.
             "horarioSemanal",
             "materiasDoDia",
             "entregas",
-            "avisos"
+            "avisos",
+            "auditoria"
         ]
     };
 
