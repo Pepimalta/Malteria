@@ -5445,6 +5445,23 @@ async function chamarClassroom(caminho) {
     return dados;
 }
 
+async function chamarClassroomPaginado(caminho, propriedade) {
+    const itens = [];
+    let tokenDaPagina = "";
+
+    do {
+        const separador = caminho.includes("?") ? "&" : "?";
+        const caminhoDaPagina = tokenDaPagina
+            ? caminho + separador + "pageToken=" + encodeURIComponent(tokenDaPagina)
+            : caminho;
+        const dados = await chamarClassroom(caminhoDaPagina);
+        itens.push(...(Array.isArray(dados[propriedade]) ? dados[propriedade] : []));
+        tokenDaPagina = dados.nextPageToken || "";
+    } while (tokenDaPagina);
+
+    return itens;
+}
+
 async function carregarTurmas() {
     try {
         const dados = await chamarClassroom(
@@ -5902,13 +5919,18 @@ function salvarHorarioSemanalResponsavel(horario) {
 
 function normalizarHorarioSemanalConfiavel(horario) {
     if (!Array.isArray(horario)) return [];
+    const porDia = new Map();
 
-    return horario.map(function (entrada) {
+    horario.forEach(function (entrada) {
         const dia = String(entrada?.dia || "").trim();
         const indiceDia = indiceDoDiaDaSemana(dia);
-        if (indiceDia < 1 || indiceDia > 5) return null;
+        if (indiceDia < 1 || indiceDia > 5) return;
 
-        const aulas = [];
+        if (!porDia.has(indiceDia)) {
+            porDia.set(indiceDia, { dia: dia, aulas: [] });
+        }
+
+        const aulas = porDia.get(indiceDia).aulas;
         (Array.isArray(entrada.aulas) ? entrada.aulas : []).forEach(function (aula) {
             const nome = String(aula || "").trim();
             const normalizado = normalizarPesquisa(nome);
@@ -5924,8 +5946,12 @@ function normalizarHorarioSemanalConfiavel(horario) {
             })) aulas.push(nome);
         });
 
-        return aulas.length ? { dia: dia, aulas: aulas } : null;
-    }).filter(Boolean);
+    });
+
+    return Array.from(porDia.entries())
+        .sort(function (a, b) { return a[0] - b[0]; })
+        .map(function (item) { return item[1]; })
+        .filter(function (entrada) { return entrada.aulas.length > 0; });
 }
 
 function nomeDoDiaDaSemana(data) {
@@ -6488,21 +6514,26 @@ async function obterContextoResponsavelClassroom(dataInicio, dataAlvo, horarioSe
     for (const turma of turmasClassroom.slice(0, 20)) {
         try {
             const respostas = await Promise.all([
-                chamarClassroom(
-                    "courses/" + turma.id + "/courseWorkMaterials?pageSize=100"
+                chamarClassroomPaginado(
+                    "courses/" + turma.id + "/courseWorkMaterials?pageSize=100",
+                    "courseWorkMaterial"
                 ),
-                chamarClassroom(
-                    "courses/" + turma.id + "/courseWork?pageSize=100"
+                chamarClassroomPaginado(
+                    "courses/" + turma.id + "/courseWork?pageSize=100",
+                    "courseWork"
                 )
             ]);
 
-            const materiais = respostas[0].courseWorkMaterial || [];
-            const atividades = respostas[1].courseWork || [];
+            const materiais = respostas[0];
+            const atividades = respostas[1];
 
             materiais.forEach(function (material) {
                 const descricao =
                     (material.title || "") + " " + (material.description || "");
                 const normalizado = normalizarPesquisa(descricao);
+                const dataCriacao = dataParaCampo(
+                    new Date(material.creationTime || material.updateTime || 0)
+                );
                 const pareceHorario = [
                     "horario", "grade de aulas", "quadro de horarios",
                     "cronograma semanal", "tabela de aulas"
@@ -6517,6 +6548,38 @@ async function obterContextoResponsavelClassroom(dataInicio, dataAlvo, horarioSe
                         "\nTítulo: " + (material.title || "") +
                         "\nDescrição: " + (material.description || "") + "\n";
                     recolherAnexos(material.materials, anexosHorario);
+                }
+
+                if (dataCriacao >= dataInicio && dataCriacao <= dataAlvo) {
+                    texto +=
+                        "\nMATERIAL PUBLICADO NO CLASSROOM\n" +
+                        "Matéria: " + turma.name + "\n" +
+                        "Data do registro: " + dataCriacao + "\n" +
+                        "Título: " + (material.title || "") + "\n" +
+                        "Descrição: " + (material.description || "") + "\n";
+
+                    const calculoMaterial = calcularEntregaLocalDaAgenda({
+                        titulo: material.title || "",
+                        descricao: material.description || "",
+                        data: new Date(material.creationTime || material.updateTime || 0),
+                        materia: turma.name,
+                        calendarioOriginal: turma.name
+                    }, horarioSemanal || []);
+
+                    if (calculoMaterial && calculoMaterial.data === dataAlvo) {
+                        entregas.push({
+                            materia: turma.name,
+                            tipo: identificarTipoAtividade(material),
+                            titulo: material.title || "Material com atividade para casa",
+                            descricao: material.description || "",
+                            dataEntrega: dataAlvo,
+                            dataRegistro: dataCriacao,
+                            origem: "Material do Google Classroom",
+                            link: material.alternateLink || "",
+                            justificativa: calculoMaterial.regra,
+                            prioridade: "Alta"
+                        });
+                    }
                 }
             });
 
