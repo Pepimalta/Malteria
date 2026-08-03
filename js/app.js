@@ -5742,23 +5742,16 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
                     "Dia em que o responsável está: " + dataReferencia +
                     " (" + nomeDoDiaDaSemana(new Date(dataReferencia + "T12:00:00")) + ")\n" +
                     "Dia que deseja preparar: " + dataAlvo +
-                    " (" + nomeDoDiaDaSemana(new Date(dataAlvo + "T12:00:00")) + ")\n\n" +
-                    "=== AGENDA NO PERÍODO ===\n" +
-                    (conteudoAgenda || "Nenhum registro escolar encontrado.") +
-                    "\n\n=== TURMAS OFICIAIS DO CLASSROOM ===\n" +
+                    " (" + nomeDoDiaDaSemana(new Date(dataAlvo + "T12:00:00")) + ")\n"
+                ),
+                agenda: conteudoAgenda,
+                classroom: contextoClassroom.texto,
+                entregasConfirmadas: entregasLocais,
+                horarioSemanal: horarioBase,
+                turmasOficiais:
                     (turmasOficiais || "Nenhuma turma oficial carregada.") +
-                    "\nTurma principal identificada: " + (turmaPrincipal || "não identificada") +
-                    "\n\n=== CLASSROOM E HORÁRIO ===\n" +
-                    contextoClassroom.texto +
-                    "\n\n=== ENTREGAS CONFIRMADAS PELO CÁLCULO LOCAL ===\n" +
-                    (entregasLocais.length
-                        ? JSON.stringify(entregasLocais)
-                        : "Nenhuma entrega pôde ser confirmada automaticamente.") +
-                    "\n\n=== HORÁRIO CONFIRMADO EM CONSULTA ANTERIOR ===\n" +
-                    (horarioBase.length
-                        ? JSON.stringify(horarioBase)
-                        : "Nenhum horário anterior salvo.")
-                ).slice(0, 60000),
+                    "\nTurma principal identificada: " +
+                    (turmaPrincipal || "não identificada"),
                 arquivos: arquivosPdfParaIA
             })
         });
@@ -6680,6 +6673,9 @@ function desenharRelatorioResponsavel(
     const materiasDoDia = Array.isArray(dados.materiasDoDia)
         ? dados.materiasDoDia
         : [];
+    const auditoria = dados.auditoria && typeof dados.auditoria === "object"
+        ? dados.auditoria
+        : null;
 
     area.innerHTML = `
         <div class="resumo-relatorio-responsavel">
@@ -6773,6 +6769,21 @@ function desenharRelatorioResponsavel(
                 ` : '<p>Nenhum aviso escolar encontrado nas semanas consultadas.</p>'}
             </div>
         </details>
+
+        ${auditoria ? `
+            <details class="detalhes-finais auditoria-relatorio-responsavel">
+                <summary>🔎 Como a Maltéria procurou os deveres</summary>
+                <div class="conteudo-avisos-relatorio">
+                    <ul>
+                        <li>Atividades do Classroom lidas: ${Number(auditoria.atividadesClassroomLidas) || 0}</li>
+                        <li>Materiais do Classroom lidos: ${Number(auditoria.materiaisClassroomLidos) || 0}</li>
+                        <li>Registros da Agenda lidos: ${Number(auditoria.registrosAgendaLidos) || 0}</li>
+                        <li>Candidatos a tarefa analisados: ${Number(auditoria.candidatosAnalisados) || 0}</li>
+                    </ul>
+                    <p>${protegerTexto(auditoria.observacao || "Auditoria concluída.")}</p>
+                </div>
+            </details>
+        ` : ""}
 
     `;
 
