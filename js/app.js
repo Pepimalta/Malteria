@@ -390,7 +390,19 @@ let paginaAnteriorFerramenta = paginaPrincipal;
 const areaMateria =
     document.querySelector("#area-materia");
 
-let usuarioAtual = null;
+const parametrosPagina = new URLSearchParams(window.location.search);
+const MODO_DEMONSTRACAO = parametrosPagina.get("demo") === "1";
+
+let usuarioAtual = MODO_DEMONSTRACAO
+    ? {
+        nome: "Visitante",
+        email: "demonstracao@malteria.app",
+        tipo: "Aluno",
+        administrador: false,
+        bancoConectado: false,
+        demonstracao: true
+    }
+    : null;
 
 document.querySelector("#salvar-lembrete")?.addEventListener("click", criarNovoLembrete);
 document.querySelector("#permitir-notificacoes")?.addEventListener("click", pedirPermissaoDeNotificacao);
@@ -566,6 +578,10 @@ function lerUsuariosLocais() {
 }
 
 function salvarUsuarioLocal(usuario) {
+    if (MODO_DEMONSTRACAO || usuario?.demonstracao) {
+        return;
+    }
+
     const usuarios = lerUsuariosLocais();
     const email = normalizarEmail(usuario.email);
     const indice = usuarios.findIndex(function (item) {
@@ -596,6 +612,10 @@ function salvarUsuarioLocal(usuario) {
 }
 
 async function restaurarSessaoMalteria() {
+    if (MODO_DEMONSTRACAO) {
+        return usuarioAtual;
+    }
+
     if (
         recuperacaoSenhaAtiva ||
         !window.MalteriaBanco?.configurado ||
@@ -1432,7 +1452,9 @@ function entrarNoAplicativo() {
             usuarioEhDono(usuarioAtual);
     }
 
-    salvarUsuarioLocal(usuarioAtual);
+    if (!MODO_DEMONSTRACAO) {
+        salvarUsuarioLocal(usuarioAtual);
+    }
     desenharHistoricoPesquisas();
 
     if (usuarioEhDono(usuarioAtual)) {
@@ -1488,6 +1510,11 @@ function entrarNoAplicativo() {
     }
 
     mostrarPaginaPrincipal();
+
+    if (MODO_DEMONSTRACAO) {
+        configurarModoDemonstracao();
+    }
+
     restaurarConexaoClassroom();
 }
 
@@ -1702,6 +1729,26 @@ const materiasDemonstracao = [
         descricao: "Vocabulário"
     }
 ];
+
+function configurarModoDemonstracao() {
+    document.body.classList.add("modo-demonstracao");
+
+    const indicador = document.querySelector("#indicador-demonstracao");
+    indicador?.classList.remove("escondido");
+
+    const botaoMinhaConta = document.querySelector("#minha-conta");
+    botaoMinhaConta?.classList.add("escondido");
+
+    const status = document.querySelector("#status-classroom");
+    if (status && !status.textContent.trim()) {
+        status.textContent =
+            "Na demonstração, você pode conectar sua própria conta Google Classroom.";
+    }
+
+    if (turmasClassroom.length === 0) {
+        desenharMaterias(materiasDemonstracao);
+    }
+}
 
 function desenharMaterias(materias) {
     const lista =
