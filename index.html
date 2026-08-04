@@ -151,6 +151,13 @@
                     <button id="ir-login-hero" class="botao-secundario">
                         Já tenho uma conta
                     </button>
+                    <a
+                        id="entrar-demonstracao"
+                        class="botao-demonstracao"
+                        href="?demo=1"
+                    >
+                        👀 Ver demonstração
+                    </a>
                 </div>
 
                 <small>Uma criação de Pepi Malta.</small>
@@ -480,6 +487,15 @@
             </button>
 
             <div class="acoes-cabecalho">
+                <a
+                    id="indicador-demonstracao"
+                    class="indicador-demonstracao escondido"
+                    href="./"
+                    title="Sair da demonstração"
+                >
+                    Modo demonstração · Sair
+                </a>
+
                 <div
                     id="seletor-modulo-dono"
                     class="seletor-modulo-dono escondido"
@@ -541,6 +557,11 @@
             <button id="abrir-agenda-lateral" class="ferramenta-lateral" type="button">
                 <span class="ferramenta-icone">📅</span>
                 <span class="ferramenta-texto">Agenda</span>
+            </button>
+
+            <button id="abrir-lembretes-lateral" class="ferramenta-lateral" type="button">
+                <span class="ferramenta-icone">🔔</span>
+                <span class="ferramenta-texto">Lembretes</span>
             </button>
 
             <button id="abrir-materias-lateral" class="ferramenta-lateral" type="button" data-perfil-visivel="aluno">
@@ -611,6 +632,7 @@
 
                 <section class="atalhos-inicio" aria-label="Atalhos principais">
                     <button type="button" data-atalho-pagina="agenda"><span>📅</span><strong>Agenda</strong><small>Veja deveres, entregas e o que preparar.</small></button>
+                    <button type="button" data-atalho-pagina="lembretes"><span>🔔</span><strong>Lembretes</strong><small>Escolha data e hora para a Maltéria avisar até você concluir.</small></button>
                     <button type="button" data-atalho-pagina="materias" data-perfil-visivel="aluno"><span>📚</span><strong>Matérias</strong><small>Abra suas turmas, materiais e atividades.</small></button>
                     <button type="button" data-atalho-pagina="redacoes" data-perfil-visivel="aluno"><span>✍️</span><strong>Redações</strong><small>Receba uma proposta e envie seu texto para correção.</small></button>
                     <button type="button" data-atalho-pagina="trabalhos"><span>🗂️</span><strong>Trabalhos escolares</strong><small>Veja os trabalhos do bimestre e o que fazer em cada um.</small></button>
@@ -717,6 +739,38 @@
                     </div>
                 </section>
 
+            </section>
+
+            <!-- PÁGINA DE LEMBRETES -->
+            <section id="pagina-lembretes" class="pagina-ferramenta pagina-lembretes escondido">
+                <button id="fechar-lembretes" class="botao-link voltar-ferramenta" type="button">← Voltar</button>
+
+                <div class="cabecalho-ferramenta cabecalho-lembretes">
+                    <span>🔔</span>
+                    <div>
+                        <small>ORGANIZAÇÃO PESSOAL</small>
+                        <h1>Lembretes</h1>
+                        <p>Marque o que precisa fazer. A Maltéria avisa com notificação, som e voz até você concluir.</p>
+                    </div>
+                </div>
+
+                <section class="caixa formulario-lembrete">
+                    <div class="grade-lembrete">
+                        <label for="lembrete-texto">O que você precisa fazer?<input id="lembrete-texto" type="text" maxlength="160" placeholder="Ex.: terminar a lista de Matemática"></label>
+                        <label for="lembrete-data">Data<input id="lembrete-data" type="date"></label>
+                        <label for="lembrete-hora">Hora<input id="lembrete-hora" type="time"></label>
+                        <label for="lembrete-repeticao">Repetir se não concluir<select id="lembrete-repeticao"><option value="5">A cada 5 minutos</option><option value="10" selected>A cada 10 minutos</option><option value="15">A cada 15 minutos</option><option value="30">A cada 30 minutos</option><option value="0">Avisar somente uma vez</option></select></label>
+                    </div>
+                    <label class="opcao-lembrete-voz"><input id="lembrete-voz" type="checkbox" checked> Ler o lembrete em voz alta</label>
+                    <button id="salvar-lembrete" class="botao-principal" type="button">＋ Criar lembrete</button>
+                    <p id="status-lembretes" class="status-pesquisa" aria-live="polite"></p>
+                    <p class="aviso-lembrete-navegador">Nesta primeira versão, a Maltéria precisa estar aberta no navegador para tocar e repetir o aviso.</p>
+                </section>
+
+                <section class="caixa lista-lembretes-caixa">
+                    <div class="titulo-lista-lembretes"><div><small>SEUS AVISOS</small><h2>Próximos lembretes</h2></div><button id="permitir-notificacoes" class="botao-secundario" type="button">Permitir notificações</button></div>
+                    <div id="lista-lembretes" class="lista-lembretes"></div>
+                </section>
             </section>
 
             <!-- PÁGINA DE CORREÇÃO DE DEVERES (ALUNO) -->
