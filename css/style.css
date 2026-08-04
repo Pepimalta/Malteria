@@ -11,6 +11,43 @@
     --sombra: 0 18px 50px rgba(64, 43, 150, 0.14);
 }
 
+/* LEMBRETES */
+.pagina-lembretes { max-width: 980px; margin: 0 auto; }
+.cabecalho-lembretes {
+    background: linear-gradient(135deg, #ff8a3d, #ff4f9a 55%, #7048ff);
+    color: #fff;
+}
+.cabecalho-lembretes > span { animation: sinoLembrete 1.6s ease-in-out infinite; }
+.grade-lembrete { display: grid; grid-template-columns: 2fr 1fr 1fr 1.2fr; gap: 14px; align-items: end; }
+.grade-lembrete label { display: grid; gap: 8px; font-weight: 700; }
+.grade-lembrete input, .grade-lembrete select { width: 100%; }
+.opcao-lembrete-voz { display: flex; align-items: center; gap: 9px; margin: 18px 0; font-weight: 650; }
+.opcao-lembrete-voz input { width: auto; }
+.aviso-lembrete-navegador { color: var(--texto-claro); font-size: .92rem; margin: 12px 0 0; }
+.titulo-lista-lembretes { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 18px; }
+.titulo-lista-lembretes h2 { margin: 3px 0 0; }
+.lista-lembretes { display: grid; gap: 12px; }
+.lembretes-vazios { padding: 28px; text-align: center; border: 2px dashed var(--borda); border-radius: 18px; color: var(--texto-claro); }
+.cartao-lembrete { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 16px; border: 1px solid #e0d6ff; border-left: 5px solid #ff5c99; border-radius: 18px; background: linear-gradient(120deg, #fff9fc, #f7f4ff); }
+.cartao-lembrete.concluido { opacity: .65; border-left-color: #34bd78; }
+.icone-cartao-lembrete { font-size: 1.8rem; }
+.conteudo-cartao-lembrete { display: grid; gap: 4px; }
+.conteudo-cartao-lembrete span, .conteudo-cartao-lembrete small { color: var(--texto-claro); }
+.acoes-cartao-lembrete { display: flex; gap: 8px; flex-wrap: wrap; }
+.acoes-cartao-lembrete button { border: 1px solid var(--borda); border-radius: 12px; padding: 9px 12px; background: #fff; color: var(--roxo); font-weight: 700; cursor: pointer; }
+.fundo-aviso-lembrete { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center; padding: 20px; background: rgba(17, 10, 43, .72); backdrop-filter: blur(8px); }
+.aviso-lembrete-ativo { width: min(500px, 100%); padding: 32px; text-align: center; border-radius: 28px; background: linear-gradient(145deg, #fff, #fff3fa); box-shadow: 0 26px 90px rgba(0,0,0,.35); }
+.aviso-lembrete-ativo h2 { margin: 10px 0; font-size: clamp(1.5rem, 5vw, 2.2rem); }
+.aviso-lembrete-ativo button { width: 100%; margin-top: 10px; }
+.sino-animado { font-size: 4rem; animation: sinoLembrete .65s ease-in-out infinite; transform-origin: 50% 10%; }
+@keyframes sinoLembrete { 0%,100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg) scale(1.08); } }
+@media (max-width: 800px) {
+    .grade-lembrete { grid-template-columns: 1fr 1fr; }
+    .grade-lembrete label:first-child { grid-column: 1 / -1; }
+    .cartao-lembrete { grid-template-columns: auto 1fr; }
+    .acoes-cartao-lembrete { grid-column: 1 / -1; }
+}
+
 * {
     box-sizing: border-box;
 }
@@ -74,7 +111,7 @@ body {
 }
 
 .texto-correcao-dever {
-    line-height: 4.7;
+    line-height: 1.7;
 }
 
 .aviso-correcao-dever {
@@ -2538,6 +2575,29 @@ body {
 
 /* CLASSROOM COMPACTO NO CANTO */
 
+.indicador-demonstracao {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #50c9d3;
+    border-radius: 999px;
+    padding: 9px 13px;
+    background: linear-gradient(135deg, #edffff, #f0ecff);
+    color: #31566c;
+    font-size: 12px;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.indicador-demonstracao:hover {
+    border-color: var(--roxo);
+    color: var(--roxo);
+}
+
+.modo-demonstracao .cabecalho {
+    border-bottom-color: rgba(43, 185, 200, 0.45);
+}
+
 .acoes-cabecalho {
     display: flex;
     align-items: center;
@@ -2914,9 +2974,35 @@ body {
 
 .entrada-botoes {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
-    max-width: 520px;
+    max-width: 720px;
     margin-top: 30px;
+}
+
+.entrada-botoes > * {
+    flex: 1 1 190px;
+}
+
+.botao-demonstracao {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #2bb9c8;
+    border-radius: 13px;
+    padding: 12px 18px;
+    background: linear-gradient(135deg, #efffff, #eef5ff);
+    color: #194d68;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 10px 24px rgba(43, 185, 200, 0.14);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.botao-demonstracao:hover {
+    box-shadow: 0 14px 28px rgba(43, 185, 200, 0.22);
+    transform: translateY(-2px);
 }
 
 .entrada-demonstracao {
