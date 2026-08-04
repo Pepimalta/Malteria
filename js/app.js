@@ -32,6 +32,7 @@ function adicionarEnfeitesVisiveisNasPaginas() {
     const configuracoes = {
         "#pagina-principal": ["📚", "✏️", "🧠", "✨", "🎓", "📐", "🔬", "🌎", "💡", "🎒"],
         "#pagina-agenda": ["📅", "⏰", "📌", "✅", "🗓️", "✏️", "🎒", "🔔", "📚", "🌟"],
+        "#pagina-lembretes": ["🔔", "⏰", "📌", "✅", "🗓️", "⏳", "✨", "📝", "🎯", "🌟"],
         "#pagina-materias": ["📚", "📐", "🧪", "🌎", "✍️", "🔬", "🎓", "📖", "🧠", "✨"],
         "#pagina-redacoes": ["✍️", "📖", "📝", "💭", "✨", "📚", "🪶", "💡", "🎭", "⭐"],
         "#pagina-trabalhos": ["🗂️", "📋", "🎨", "🔬", "📊", "🎤", "📚", "✂️", "📅", "✨"],
@@ -79,6 +80,247 @@ function adicionarEnfeitesVisiveisNasPaginas() {
     });
 }
 
+/* LEMBRETES -------------------------------------------------------------- */
+
+function chaveLocalDosLembretes() {
+    const email = String(usuarioAtual?.email || "visitante")
+        .trim()
+        .toLowerCase();
+    return "malteriaLembretes:" + email;
+}
+
+function lerLembretes() {
+    try {
+        const dados = JSON.parse(localStorage.getItem(chaveLocalDosLembretes()) || "[]");
+        return Array.isArray(dados) ? dados : [];
+    } catch (erro) {
+        return [];
+    }
+}
+
+function salvarLembretes(lembretes) {
+    localStorage.setItem(chaveLocalDosLembretes(), JSON.stringify(lembretes));
+}
+
+function prepararFormularioLembrete() {
+    const campoData = document.querySelector("#lembrete-data");
+    const campoHora = document.querySelector("#lembrete-hora");
+    if (!campoData || !campoHora) return;
+    const agora = new Date();
+    if (!campoData.value) campoData.value = dataParaCampo(agora);
+    if (!campoHora.value) {
+        agora.setMinutes(agora.getMinutes() + 5);
+        campoHora.value = String(agora.getHours()).padStart(2, "0") + ":" +
+            String(agora.getMinutes()).padStart(2, "0");
+    }
+}
+
+function dataHoraDoLembrete(lembrete) {
+    return new Date(lembrete.data + "T" + lembrete.hora + ":00");
+}
+
+function formatarDataHoraLembrete(lembrete) {
+    const data = dataHoraDoLembrete(lembrete);
+    if (Number.isNaN(data.getTime())) return lembrete.data + " " + lembrete.hora;
+    return data.toLocaleString("pt-BR", {
+        weekday: "short",
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
+function desenharLembretes() {
+    const area = document.querySelector("#lista-lembretes");
+    if (!area) return;
+    const lembretes = lerLembretes().sort(function (a, b) {
+        return dataHoraDoLembrete(a) - dataHoraDoLembrete(b);
+    });
+    if (!lembretes.length) {
+        area.innerHTML = '<div class="lembretes-vazios">🔕 Nenhum lembrete criado ainda.</div>';
+        return;
+    }
+    area.innerHTML = lembretes.map(function (item) {
+        const concluido = item.concluido === true;
+        return `
+            <article class="cartao-lembrete ${concluido ? "concluido" : ""}">
+                <div class="icone-cartao-lembrete">${concluido ? "✅" : "⏰"}</div>
+                <div class="conteudo-cartao-lembrete">
+                    <strong>${protegerTexto(item.texto)}</strong>
+                    <span>${protegerTexto(formatarDataHoraLembrete(item))}</span>
+                    <small>${Number(item.repeticao) > 0 ? "Repete a cada " + Number(item.repeticao) + " min até concluir" : "Avisa uma vez"}</small>
+                </div>
+                <div class="acoes-cartao-lembrete">
+                    ${concluido ? "" : '<button type="button" data-concluir-lembrete="' + item.id + '">Concluir</button>'}
+                    <button type="button" data-excluir-lembrete="${item.id}">Excluir</button>
+                </div>
+            </article>`;
+    }).join("");
+
+    area.querySelectorAll("[data-concluir-lembrete]").forEach(function (botao) {
+        botao.addEventListener("click", function () {
+            concluirLembrete(botao.dataset.concluirLembrete);
+        });
+    });
+    area.querySelectorAll("[data-excluir-lembrete]").forEach(function (botao) {
+        botao.addEventListener("click", function () {
+            salvarLembretes(lerLembretes().filter(function (item) {
+                return item.id !== botao.dataset.excluirLembrete;
+            }));
+            desenharLembretes();
+        });
+    });
+}
+
+function concluirLembrete(id) {
+    const lembretes = lerLembretes();
+    const lembrete = lembretes.find(function (item) { return item.id === id; });
+    if (!lembrete) return;
+    lembrete.concluido = true;
+    lembrete.concluidoEm = new Date().toISOString();
+    salvarLembretes(lembretes);
+    document.querySelector("#aviso-lembrete-ativo")?.remove();
+    desenharLembretes();
+}
+
+async function pedirPermissaoDeNotificacao() {
+    const status = document.querySelector("#status-lembretes");
+    if (!("Notification" in window)) {
+        if (status) status.textContent = "Este navegador não oferece notificações. O som dentro da Maltéria continuará funcionando.";
+        return false;
+    }
+    if (Notification.permission === "granted") return true;
+    const permissao = await Notification.requestPermission();
+    if (status) status.textContent = permissao === "granted"
+        ? "Notificações permitidas."
+        : "Notificações não foram permitidas; o aviso dentro da página continuará funcionando.";
+    return permissao === "granted";
+}
+
+function criarNovoLembrete() {
+    const texto = document.querySelector("#lembrete-texto").value.trim();
+    const data = document.querySelector("#lembrete-data").value;
+    const hora = document.querySelector("#lembrete-hora").value;
+    const repeticao = Number(document.querySelector("#lembrete-repeticao").value) || 0;
+    const voz = document.querySelector("#lembrete-voz").checked;
+    const status = document.querySelector("#status-lembretes");
+    if (!texto || !data || !hora) {
+        status.textContent = "Preencha o lembrete, a data e a hora.";
+        return;
+    }
+    const momento = new Date(data + "T" + hora + ":00");
+    if (Number.isNaN(momento.getTime())) {
+        status.textContent = "A data ou a hora não é válida.";
+        return;
+    }
+    const lembretes = lerLembretes();
+    lembretes.push({
+        id: "lembrete-" + Date.now(),
+        texto,
+        data,
+        hora,
+        repeticao,
+        voz,
+        concluido: false,
+        criadoEm: new Date().toISOString(),
+        ultimoAvisoEm: null,
+        adiadoAte: null
+    });
+    salvarLembretes(lembretes);
+    document.querySelector("#lembrete-texto").value = "";
+    status.textContent = "Lembrete criado para " + formatarDataHoraLembrete({ data, hora }) + ".";
+    pedirPermissaoDeNotificacao();
+    desenharLembretes();
+}
+
+function tocarSomLembrete() {
+    try {
+        const AudioContexto = window.AudioContext || window.webkitAudioContext;
+        const contexto = new AudioContexto();
+        [0, 0.22, 0.44].forEach(function (atraso, indice) {
+            const oscilador = contexto.createOscillator();
+            const ganho = contexto.createGain();
+            oscilador.frequency.value = [660, 880, 740][indice];
+            ganho.gain.setValueAtTime(0.001, contexto.currentTime + atraso);
+            ganho.gain.exponentialRampToValueAtTime(0.24, contexto.currentTime + atraso + 0.02);
+            ganho.gain.exponentialRampToValueAtTime(0.001, contexto.currentTime + atraso + 0.18);
+            oscilador.connect(ganho).connect(contexto.destination);
+            oscilador.start(contexto.currentTime + atraso);
+            oscilador.stop(contexto.currentTime + atraso + 0.2);
+        });
+    } catch (erro) {
+        console.warn("O som do lembrete não pôde tocar.", erro);
+    }
+}
+
+function falarLembrete(texto) {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const fala = new SpeechSynthesisUtterance("Lembrete da Maltéria: " + texto);
+    fala.lang = "pt-BR";
+    fala.rate = 1.02;
+    window.speechSynthesis.speak(fala);
+}
+
+function adiarLembrete(id, minutos) {
+    const lembretes = lerLembretes();
+    const lembrete = lembretes.find(function (item) { return item.id === id; });
+    if (!lembrete) return;
+    lembrete.adiadoAte = new Date(Date.now() + minutos * 60000).toISOString();
+    lembrete.ultimoAvisoEm = new Date().toISOString();
+    salvarLembretes(lembretes);
+    document.querySelector("#aviso-lembrete-ativo")?.remove();
+    desenharLembretes();
+}
+
+function exibirAvisoLembrete(lembrete) {
+    tocarSomLembrete();
+    if (lembrete.voz) falarLembrete(lembrete.texto);
+    if ("Notification" in window && Notification.permission === "granted") {
+        try { new Notification("🔔 Lembrete da Maltéria", { body: lembrete.texto, tag: lembrete.id, renotify: true }); } catch (erro) {}
+    }
+    document.querySelector("#aviso-lembrete-ativo")?.remove();
+    const aviso = document.createElement("div");
+    aviso.id = "aviso-lembrete-ativo";
+    aviso.className = "fundo-aviso-lembrete";
+    aviso.innerHTML = `
+        <section class="aviso-lembrete-ativo" role="alertdialog" aria-modal="true">
+            <div class="sino-animado">🔔</div>
+            <small>LEMBRETE DA MALTÉRIA</small>
+            <h2>${protegerTexto(lembrete.texto)}</h2>
+            <p>Você marcou este lembrete para ${protegerTexto(formatarDataHoraLembrete(lembrete))}.</p>
+            <button class="botao-principal" type="button" data-aviso-concluir>✅ Já fiz</button>
+            <button class="botao-secundario" type="button" data-aviso-adiar>⏰ Lembrar novamente em 5 minutos</button>
+        </section>`;
+    document.body.appendChild(aviso);
+    aviso.querySelector("[data-aviso-concluir]").addEventListener("click", function () { concluirLembrete(lembrete.id); });
+    aviso.querySelector("[data-aviso-adiar]").addEventListener("click", function () { adiarLembrete(lembrete.id, 5); });
+}
+
+function verificarLembretes() {
+    const agora = Date.now();
+    const lembretes = lerLembretes();
+    let alterou = false;
+    const devido = lembretes.find(function (item) {
+        if (item.concluido) return false;
+        const momento = item.adiadoAte
+            ? new Date(item.adiadoAte).getTime()
+            : dataHoraDoLembrete(item).getTime();
+        if (!Number.isFinite(momento) || momento > agora) return false;
+        if (!item.ultimoAvisoEm) return true;
+        if (Number(item.repeticao) <= 0 && !item.adiadoAte) return false;
+        const intervalo = Math.max(1, Number(item.repeticao) || 5) * 60000;
+        return agora - new Date(item.ultimoAvisoEm).getTime() >= intervalo;
+    });
+    if (!devido || document.querySelector("#aviso-lembrete-ativo")) return;
+    devido.ultimoAvisoEm = new Date().toISOString();
+    devido.adiadoAte = null;
+    alterou = true;
+    if (alterou) salvarLembretes(lembretes);
+    exibirAvisoLembrete(devido);
+}
+
 adicionarEnfeitesVisiveisNasPaginas();
 const animacaoMalteria =
     document.querySelector("#animacao-malteria");
@@ -96,6 +338,9 @@ const paginaPrincipal =
 
 const paginaAgenda =
     document.querySelector("#pagina-agenda");
+
+const paginaLembretes =
+    document.querySelector("#pagina-lembretes");
 
 const paginaMaterias =
     document.querySelector("#pagina-materias");
@@ -146,6 +391,13 @@ const areaMateria =
     document.querySelector("#area-materia");
 
 let usuarioAtual = null;
+
+document.querySelector("#salvar-lembrete")?.addEventListener("click", criarNovoLembrete);
+document.querySelector("#permitir-notificacoes")?.addEventListener("click", pedirPermissaoDeNotificacao);
+prepararFormularioLembrete();
+desenharLembretes();
+window.setInterval(verificarLembretes, 15000);
+window.setTimeout(verificarLembretes, 1500);
 let materiaAtual = null;
 let tokenClassroom = "";
 let clienteClassroom = null;
@@ -538,6 +790,7 @@ document
 const paginasInternas = [
     paginaPrincipal,
     paginaAgenda,
+    paginaLembretes,
     paginaMaterias,
     paginaTrabalhos,
     paginaRedacoes,
@@ -1714,6 +1967,12 @@ function mostrarPaginaAgenda() {
     mostrarPaginaInterna(paginaAgenda);
 }
 
+function mostrarPaginaLembretes() {
+    prepararFormularioLembrete();
+    desenharLembretes();
+    mostrarPaginaInterna(paginaLembretes);
+}
+
 function mostrarPaginaMaterias() {
     mostrarPaginaInterna(paginaMaterias);
 }
@@ -1758,6 +2017,14 @@ document
     .addEventListener("click", mostrarPaginaAgenda);
 
 document
+    .querySelector("#abrir-lembretes-lateral")
+    .addEventListener("click", mostrarPaginaLembretes);
+
+document
+    .querySelector("#fechar-lembretes")
+    .addEventListener("click", mostrarPaginaPrincipal);
+
+document
     .querySelector("#abrir-materias-lateral")
     .addEventListener("click", mostrarPaginaMaterias);
 
@@ -1781,6 +2048,7 @@ document.querySelectorAll("[data-atalho-pagina]").forEach(function (botao) {
     botao.addEventListener("click", function () {
         const destino = botao.dataset.atalhoPagina;
         if (destino === "agenda") mostrarPaginaAgenda();
+        if (destino === "lembretes") mostrarPaginaLembretes();
         if (destino === "materias") mostrarPaginaMaterias();
         if (destino === "redacoes") mostrarPaginaRedacoes();
         if (destino === "trabalhos") mostrarPaginaTrabalhos();
@@ -3082,6 +3350,8 @@ async function pesquisarMateriais() {
             "#campo-pesquisa"
         ).value.trim();
 
+    const perguntaFoiDigitada = Boolean(pergunta);
+
     const botao =
         document.querySelector("#pesquisar");
 
@@ -3256,17 +3526,17 @@ async function pesquisarMateriais() {
             );
         }
 
-        if (fontes.length === 0) {
-            throw new Error(
-                "Não encontrei itens nesse período."
-            );
-        }
-
         const urgentes =
             encontrarAvisosUrgentes(fontes);
 
+        conteudo =
+            "TOTAL DE FONTES: " + fontes.length + "\n\n" +
+            conteudo;
+
         status.textContent =
-            "A inteligência da MALTÉRIA está analisando os resultados...";
+            fontes.length > 0
+                ? "A inteligência da MALTÉRIA está analisando os resultados..."
+                : "Não achei esse assunto nos materiais. Pesquisando uma explicação externa...";
 
         const respostaServidor = await fetch(
             ENDERECO_IA,
@@ -3291,6 +3561,9 @@ async function pesquisarMateriais() {
                     semData: semData,
                     dataInicial: semData ? "" : dataInicial,
                     dataFinal: semData ? "" : dataFinal,
+                    permitirPesquisaExterna:
+                        perguntaFoiDigitada &&
+                        (tipoPesquisa === "todos" || tipoPesquisa === "material"),
                     conteudo:
                         conteudo.slice(0, 60000),
                     arquivos: arquivosPdfParaIA
@@ -3308,9 +3581,32 @@ async function pesquisarMateriais() {
             );
         }
 
+        const fontesExternas = Array.isArray(dados.fontes)
+            ? dados.fontes.map(function (fonte, indice) {
+                return {
+                    chave: "fonte-externa-" + indice + "-" + (fonte.url || ""),
+                    origem: "google",
+                    pendente: false,
+                    tipo: "Fonte externa",
+                    materia: materiaEscolhida === "__todas__"
+                        ? "Pesquisa geral"
+                        : materiaEscolhida,
+                    titulo: fonte.titulo || "Fonte consultada",
+                    descricao: "Resultado usado somente nesta pesquisa.",
+                    data: new Date(),
+                    prazo: null,
+                    link: fonte.url || ""
+                };
+            }).filter(function (fonte) {
+                return Boolean(fonte.link);
+            })
+            : [];
+
+        const fontesParaExibir = fontes.concat(fontesExternas);
+
         desenharResultadoPesquisa(
             dados,
-            fontes,
+            fontesParaExibir,
             urgentes,
             materiaEscolhida === "__todas__"
                 ? "Todas as matérias"
@@ -3332,16 +3628,18 @@ async function pesquisarMateriais() {
             dataInicial: semData ? "" : dataInicial,
             dataFinal: semData ? "" : dataFinal,
             dados: dados,
-            fontes: fontes
+            fontes: fontesParaExibir
         });
 
         status.textContent =
-            fontes.length +
-            (
-                fontes.length === 1
-                    ? " item encontrado."
-                    : " itens encontrados."
-            );
+            dados.origem === "pesquisa_externa"
+                ? "Resposta complementada com pesquisa externa e fontes consultadas."
+                : fontes.length +
+                    (
+                        fontes.length === 1
+                            ? " item encontrado."
+                            : " itens encontrados."
+                    );
     } catch (erro) {
         console.error(erro);
         status.textContent =
@@ -5641,7 +5939,9 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
     const dataAlvo = configuracao.dataAlvo || dataRelatorioResponsavel.value;
     const dataReferencia = configuracao.dataReferencia || dataReferenciaRelatorioResponsavel.value;
     const horizonte = configuracao.horizonte || document.querySelector("#horizonte-relatorio-responsavel").value;
-    const dias = Number(horizonte) || 14;
+    // Janela retroativa completa: termina na data-alvo e volta exatamente
+    // a quantidade de dias escolhida, mesmo quando a consulta ocorre meses depois.
+    const dias = Math.max(14, Math.min(56, Number(horizonte) || 14));
 
     if (!tokenClassroom) {
         status.textContent = "Conecte a conta Google do aluno para consultar a Agenda e o Classroom.";
@@ -5660,6 +5960,10 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
     inicio.setDate(inicio.getDate() - dias);
     const dataInicio = dataParaCampo(inicio);
     const dataFimConsulta = dataAlvo;
+    const descricaoJanelaCompleta =
+        dias + " dias: " +
+        dataInicio.split("-").reverse().join("/") + " até " +
+        dataFimConsulta.split("-").reverse().join("/");
 
     if (botao) {
         botao.disabled = true;
@@ -5670,6 +5974,7 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
     arquivosPdfParaIA = [];
 
     try {
+        status.textContent = "Consultando a janela completa de " + descricaoJanelaCompleta + "...";
         const agenda = await obterEventosAgenda(dataInicio, dataFimConsulta);
         const turmaPrincipal = identificarTurmaPrincipalDoAluno();
         const eventosEscolares = agenda.fontes
