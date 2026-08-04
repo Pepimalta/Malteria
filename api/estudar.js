@@ -83,7 +83,8 @@ export default async function handler(req, res) {
             quantidade,
             modalidade,
             mapaDificuldade,
-            perguntasAnteriores
+            perguntasAnteriores,
+            permitirPesquisaExterna
         } = req.body || {};
 
         if (tipo === "nivel_evolucao") {
@@ -115,8 +116,15 @@ export default async function handler(req, res) {
         const relatorioComFontesSeparadas =
             tipo === "relatorio_responsavel" &&
             (agenda || classroom || entregasConfirmadas || horarioSemanal);
+        const pesquisaExternaPermitida =
+            tipo === "pesquisa" &&
+            permitirPesquisaExterna === true &&
+            Boolean(String(pergunta || "").trim());
 
-        if (!materia || (!conteudo && !relatorioComFontesSeparadas)) {
+        if (
+            !materia ||
+            (!conteudo && !relatorioComFontesSeparadas && !pesquisaExternaPermitida)
+        ) {
             return res.status(400).json({
                 erro:
                     "A matéria e o conteúdo são obrigatórios."
@@ -124,7 +132,7 @@ export default async function handler(req, res) {
         }
 
         const conteudoLimitado =
-            String(conteudo).slice(0, 60000);
+            String(conteudo || "").slice(0, 60000);
 
         if (tipo === "relatorio_responsavel") {
             return await criarRelatorioResponsavel(res, {
@@ -182,7 +190,8 @@ export default async function handler(req, res) {
                     dataInicial,
                     dataFinal,
                     conteudo: conteudoLimitado,
-                    arquivos
+                    arquivos,
+                    permitirPesquisaExterna: pesquisaExternaPermitida
                 }
             );
         }
@@ -843,7 +852,154 @@ Responda somente em JSON válido.
     return res.status(200).json(resultado);
 }
 
+async function pesquisarComGoogle(pergunta, materia) {
+    const chave = process.env.GEMINI_API_KEY;
+    if (!chave) throw new Error("A chave do Gemini não está configurada.");
+
+    const modelos = ["gemini-3.5-flash", "gemini-3.1-flash-lite"];
+    let ultimoErro = "A pesquisa externa não respondeu.";
+
+    for (const modelo of modelos) {
+        const resposta = await fetch(
+            "https://generativelanguage.googleapis.com/v1beta/models/" +
+                modelo + ":generateContent?key=" + encodeURIComponent(chave),
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{
+                        role: "user",
+                        parts: [{
+                            text:
+                                "Pesquise no Google e ensine em português do Brasil, com linguagem " +
+                                "adequada para um estudante. Matéria: " + (materia || "não informada") +
+                                ". Pergunta: " + pergunta +
+                                ". Explique o conceito, mostre um exemplo e confira a resposta."
+                        }]
+                    }],
+                    tools: [{ google_search: {} }],
+                    generationConfig: { temperature: 0.15, maxOutputTokens: 5000 }
+                })
+            }
+        );
+
+        const dadosResposta = await resposta.json().catch(function () { return {}; });
+        if (!resposta.ok) {
+            ultimoErro = dadosResposta?.error?.message || "Falha ao pesquisar no Google.";
+            continue;
+        }
+
+        const candidato = dadosResposta?.candidates?.[0] || {};
+        const texto = (candidato?.content?.parts || [])
+            .map(function (parte) { return parte.text || ""; })
+            .join("\n")
+            .trim();
+        const fontes = (candidato?.groundingMetadata?.groundingChunks || [])
+            .map(function (item) {
+                return item?.web
+                    ? { titulo: item.web.title || "Fonte consultada", url: item.web.uri || "" }
+                    : null;
+            })
+            .filter(function (item) { return item && item.url; })
+            .filter(function (item, indice, lista) {
+                return lista.findIndex(function (outro) { return outro.url === item.url; }) === indice;
+            });
+
+        if (texto) return { texto: texto, fontes: fontes };
+        ultimoErro = "O Google não devolveu conteúdo para essa pergunta.";
+    }
+
+    throw new Error(ultimoErro);
+}
+
+async function responderPesquisaExterna(res, dados) {
+    const pesquisa = await pesquisarComGoogle(dados.pergunta, dados.materia);
+    const listaDeFontes = pesquisa.fontes.length
+        ? pesquisa.fontes.map(function (fonte, indice) {
+            return (indice + 1) + ". " + fonte.titulo + " - " + fonte.url;
+        }).join("\n")
+        : "A busca foi realizada, mas o provedor não devolveu links de referência.";
+    const schema = {
+        type: "OBJECT",
+        properties: {
+            resposta: { type: "STRING" },
+            slides: {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        titulo: { type: "STRING" },
+                        pontos: { type: "ARRAY", items: { type: "STRING" } }
+                    },
+                    required: ["titulo", "pontos"]
+                }
+            },
+            tabela: {
+                type: "OBJECT",
+                properties: {
+                    titulo: { type: "STRING" },
+                    colunas: { type: "ARRAY", items: { type: "STRING" } },
+                    linhas: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                celulas: { type: "ARRAY", items: { type: "STRING" } }
+                            },
+                            required: ["celulas"]
+                        }
+                    }
+                },
+                required: ["titulo", "colunas", "linhas"]
+            }
+        },
+        required: ["resposta", "slides", "tabela"]
+    };
+    const instrucao = `
+Você é a assistente educacional da Maltéria.
+O Classroom não trouxe material suficiente para responder a pergunta, então
+foi autorizada uma pesquisa externa no Google SOMENTE para esta resposta.
+
+PERGUNTA: ${dados.pergunta}
+MATÉRIA: ${dados.materia || "não informada"}
+FORMATO: ${dados.formato || "texto"}
+
+RESULTADO PESQUISADO:
+${pesquisa.texto}
+
+FONTES:
+${listaDeFontes}
+
+Explique com clareza, passo a passo e em português do Brasil. Se for Matemática,
+inclua definição, método, exemplo resolvido e uma pequena verificação. Não invente
+conteúdo nem links. No fim da resposta, crie a seção "Fontes consultadas" com os
+links fornecidos acima. Informe de forma breve que esta resposta usou pesquisa
+externa porque não havia base suficiente nos materiais do Classroom.
+Responda somente em JSON válido.
+`;
+    const resultado = await chamarGemini(instrucao, schema);
+    resultado.origem = "pesquisa_externa";
+    resultado.fontes = pesquisa.fontes;
+    return res.status(200).json(resultado);
+}
+
 async function responderPesquisa(res, dados) {
+    const conteudoRecebido = String(dados.conteudo || "");
+    const totalInformado = conteudoRecebido.match(/TOTAL DE FONTES:\s*(\d+)/i);
+    const semFontes = totalInformado
+        ? Number(totalInformado[1]) === 0
+        : conteudoRecebido.replace(/\s/g, "").length < 220;
+    const temArquivo = Array.isArray(dados.arquivos) && dados.arquivos.length > 0;
+
+    if (
+        dados.permitirPesquisaExterna &&
+        dados.pergunta &&
+        semFontes &&
+        !temArquivo
+    ) {
+        return responderPesquisaExterna(res, dados);
+    }
+
     if (!dados.pergunta) {
         return res.status(400).json({
             erro:
@@ -972,6 +1128,27 @@ Responda somente em JSON válido.
         schema,
         prepararPartesDeArquivos(dados.arquivos)
     );
+
+    const respostaNormalizada = String(resultado.resposta || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+    const respostaSemBase = [
+        "nao foi possivel encontrar",
+        "nao encontrei nos materiais",
+        "nao consta nos materiais",
+        "nao aparece nos materiais",
+        "materiais nao contem",
+        "material nao contem",
+        "nao ha informacoes suficientes",
+        "nao ha material suficiente"
+    ].some(function (trecho) {
+        return respostaNormalizada.includes(trecho);
+    });
+
+    if (dados.permitirPesquisaExterna && respostaSemBase) {
+        return responderPesquisaExterna(res, dados);
+    }
 
     return res.status(200).json(resultado);
 }
