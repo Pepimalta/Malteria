@@ -16,7 +16,7 @@ const ESCOPOS_CLASSROOM = [
 // No site publicado, usa sempre o mesmo domínio que está aberto.
 // Assim, renomear o projeto na Vercel não quebra a API da Maltéria.
 const ENDERECO_IA = window.location.protocol === "file:"
-    ? "https://malteria.vercel.app/api/estudar"
+    ? "https://pepi-estudos.vercel.app/api/estudar"
     : "/api/estudar";
 
 const EMAIL_DONO_MALTERIA =
@@ -4065,6 +4065,13 @@ async function gerarPropostaRedacao() {
                 arquivos: arquivosPdfParaIA
             })
         });
+        const tipoConteudo = resposta.headers.get("content-type") || "";
+        if (!tipoConteudo.includes("application/json")) {
+            throw new Error(
+                "A API da Maltéria não respondeu corretamente. Aguarde a implantação da Vercel e tente novamente."
+            );
+        }
+
         const dados = await resposta.json();
         if (!resposta.ok) {
             throw new Error(dados.erro || "Não foi possível criar a proposta.");
@@ -6073,6 +6080,13 @@ async function carregarRelatorioResponsavel(configuracao = {}) {
                 arquivos: arquivosPdfParaIA
             })
         });
+
+        const tipoConteudoAgenda = resposta.headers.get("content-type") || "";
+        if (!tipoConteudoAgenda.includes("application/json")) {
+            throw new Error(
+                "A API da Maltéria não respondeu corretamente. O endereço publicado pode estar sem implantação."
+            );
+        }
 
         const dados = await resposta.json();
 
