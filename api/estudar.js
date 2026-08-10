@@ -412,34 +412,6 @@ async function criarRelatorioResponsavel(res, dados) {
         });
     }
 
-    const fontesSeparadas = `
-=== TURMAS OFICIAIS DO CLASSROOM ===
-${dados.turmasOficiais || "Nenhuma turma oficial carregada."}
-
-=== HORARIO SEMANAL CONFIRMADO ===
-${dados.horarioSemanal && dados.horarioSemanal.length
-    ? JSON.stringify(dados.horarioSemanal)
-    : "Nenhum horario semanal confirmado."}
-
-=== ENTREGAS JA CONFIRMADAS POR REGRAS DETERMINISTICAS ===
-${dados.entregasConfirmadas && dados.entregasConfirmadas.length
-    ? JSON.stringify(dados.entregasConfirmadas)
-    : "Nenhuma entrega confirmada automaticamente."}
-
-=== CLASSROOM: TODAS AS ATIVIDADES E MATERIAIS LIDOS ===
-${dados.classroom || "Nenhum registro do Classroom foi recebido."}
-
-=== AGENDA ESCOLAR: TODOS OS REGISTROS LIDOS ===
-${dados.agenda || "Nenhum registro da Agenda escolar foi recebido."}
-
-=== CONTEXTO COMPLEMENTAR ===
-${dados.conteudo || "Nenhum contexto complementar."}
-`;
-
-    // O relatorio usa as fontes separadas para impedir que a Agenda corte os
-    // registros do Classroom quando a janela consultada for grande.
-    dados.conteudo = fontesSeparadas;
-
     const instrucao = `
 Você é a assistente educacional da visão do responsável no aplicativo Maltéria.
 
@@ -457,14 +429,6 @@ exatamente na data-alvo. Os professores podem ter registrado a orientação
 semanas antes da data real.
 
 REGRAS DE INTERPRETAÇÃO:
-- O PDF ou a imagem do horário oficial é a única fonte autorizada para montar
-  a grade semanal. Nunca deduza o horário pela frequência ou pela data dos
-  eventos da Agenda.
-- Leia somente a coluna da turma oficial indicada nos dados do Classroom.
-  Não copie aulas das colunas de outras turmas.
-- "Agenda escolar", "Recreio" e "Intervalo" são rótulos ou fontes, não matérias.
-- Geografia (G) e Geography (GHY) são disciplinas diferentes. Nunca una as duas
-  em "Geografia/Geography" nem use uma para completar a outra.
 - Antes de procurar tarefas, determine o dia da semana da data-alvo e monte
   a lista completa das matérias previstas naquele dia usando o horário encontrado.
 - Se a data-alvo cair em sábado ou domingo, não invente matérias nem aulas regulares.
@@ -476,10 +440,6 @@ REGRAS DE INTERPRETAÇÃO:
 - A seção TURMAS OFICIAIS DO CLASSROOM contém os nomes confiáveis das turmas.
   Preserve exatamente a letra da turma informada ali. Nunca transforme Turma B
   em Turma F, nem invente uma turma a partir de texto mal reconhecido.
-- Quando o bloco informar "Turma principal identificada", use essa letra como
-  referência e ignore registros explicitamente destinados a outras letras.
-  A existência de calendários A, C, D, E ou F não é motivo para desistir da
-  análise da Turma B nem para declarar que a turma está indeterminada.
 - Calendários abreviados como RED 6B, MAT 6B e CIE 6B são calendários escolares
   e devem ser analisados integralmente.
 - Para cada matéria do dia, informe em materiasDoDia se há uma entrega confirmada,
@@ -499,10 +459,6 @@ REGRAS DE INTERPRETAÇÃO:
   salvo quando o texto informar mês ou ano.
 - "Próxima aula" significa o próximo dia em que aquela matéria aparece no
   horário semanal encontrado.
-- Registros escritos como "Para casa", "Dever", "Tarefa", "Exercícios",
-  "Lista", "Página" ou "Folha", mesmo sem uma data escrita, devem ser
-  associados à próxima aula daquela matéria quando o horário semanal
-  tiver sido fornecido. Não exija a expressão literal "para casa".
 - "Próxima aula de Ciências", por exemplo, deve usar o próximo dia de Ciências,
   mesmo que outras matérias tenham aula antes.
 - Se não houver horário confiável, não invente a data. Coloque a dúvida em avisos.
@@ -522,27 +478,10 @@ REGRAS DE INTERPRETAÇÃO:
 - Não inclua compromissos pessoais ou eventos sem relação escolar.
 - Informe a data original do registro e explique brevemente como a data de
   entrega foi calculada.
-- Em cada entrega, copie para "descricao" a orientação completa encontrada
-  no registro: páginas, números dos exercícios, folha, livro, material e tudo
-  o que o aluno precisa fazer. Nunca responda apenas que "existe um dever".
 - Leia integralmente qualquer PDF de horário anexado.
 - Se encontrar o horário, devolva-o organizado por dia da semana.
 - Responda em português do Brasil, de maneira formal, objetiva e sem alarmismo.
 - Não invente matérias, datas ou tarefas.
-
-AUDITORIA OBRIGATORIA ANTES DA RESPOSTA:
-- Conte separadamente todos os blocos "ATIVIDADE DO CLASSROOM",
-  "MATERIAL PUBLICADO NO CLASSROOM" e "REGISTRO DA AGENDA" recebidos.
-- Monte primeiro uma lista de TODOS os candidatos a tarefa e calcule a data de
-  entrega de cada um. Somente depois filtre pela data-alvo. Nao pare no primeiro.
-- O Classroom tem prioridade para enunciado, anexos e data oficial. A Agenda
-  complementa a busca, mas nunca pode apagar um dever encontrado no Classroom.
-- Toda atividade do Classroom cuja dueDate seja a data-alvo deve aparecer.
-- Material do Classroom com comandos como "para casa", "faca", "exercicios",
-  "pagina", "lista" ou "folha" e sem dueDate deve ser associado a proxima aula
-  da disciplina conforme o horario confirmado.
-- Preencha o objeto auditoria com as contagens realmente lidas. Se alguma fonte
-  estiver vazia ou truncada, explique isso em auditoria.observacao.
 
 Responda somente em JSON válido.
 `;
@@ -586,7 +525,6 @@ Responda somente em JSON válido.
                         materia: { type: "STRING" },
                         tipo: { type: "STRING" },
                         titulo: { type: "STRING" },
-                        descricao: { type: "STRING" },
                         dataEntrega: { type: "STRING" },
                         dataRegistro: { type: "STRING" },
                         origem: { type: "STRING" },
@@ -594,7 +532,7 @@ Responda somente em JSON válido.
                         prioridade: { type: "STRING" }
                     },
                     required: [
-                        "materia", "tipo", "titulo", "descricao", "dataEntrega",
+                        "materia", "tipo", "titulo", "dataEntrega",
                         "dataRegistro", "origem", "justificativa", "prioridade"
                     ]
                 }
@@ -602,23 +540,6 @@ Responda somente em JSON válido.
             avisos: {
                 type: "ARRAY",
                 items: { type: "STRING" }
-            },
-            auditoria: {
-                type: "OBJECT",
-                properties: {
-                    atividadesClassroomLidas: { type: "INTEGER" },
-                    materiaisClassroomLidos: { type: "INTEGER" },
-                    registrosAgendaLidos: { type: "INTEGER" },
-                    candidatosAnalisados: { type: "INTEGER" },
-                    observacao: { type: "STRING" }
-                },
-                required: [
-                    "atividadesClassroomLidas",
-                    "materiaisClassroomLidos",
-                    "registrosAgendaLidos",
-                    "candidatosAnalisados",
-                    "observacao"
-                ]
             }
         },
         required: [
@@ -627,8 +548,7 @@ Responda somente em JSON válido.
             "horarioSemanal",
             "materiasDoDia",
             "entregas",
-            "avisos",
-            "auditoria"
+            "avisos"
         ]
     };
 
@@ -636,6 +556,145 @@ Responda somente em JSON válido.
         instrucao,
         schema,
         prepararPartesDeArquivos(dados.arquivos)
+    );
+
+    return res.status(200).json(resultado);
+}
+
+async function avaliarNivelEvolucao(res, dados) {
+    const arquivosValidos = dados.arquivos
+        .filter(function (arquivo) {
+            return arquivo &&
+                typeof arquivo.data === "string" &&
+                typeof arquivo.mimeType === "string" &&
+                (
+                    arquivo.mimeType.startsWith("image/") ||
+                    arquivo.mimeType === "application/pdf"
+                );
+        })
+        .slice(0, 6);
+
+    if (arquivosValidos.length === 0) {
+        return res.status(400).json({
+            erro: "Os documentos enviados não puderam ser lidos."
+        });
+    }
+
+    const descricaoArquivos = arquivosValidos.map(function (arquivo, indice) {
+        return `${indice + 1}. ${arquivo.categoria || "documento"}: ${arquivo.nome || "arquivo escolar"}`;
+    }).join("\n");
+
+    const instrucao = `
+Você é a inteligência educacional da Maltéria.
+
+Analise cuidadosamente os documentos escolares anexados. O primeiro documento
+deve ser o boletim; os demais podem ser provas, listas ou folhas de exercícios.
+
+OBJETIVO DO ALUNO:
+${dados.objetivo || "melhorar_notas"}
+
+DOCUMENTOS:
+${descricaoArquivos}
+
+REGRAS OBRIGATÓRIAS:
+- Responda em português do Brasil, com linguagem formal, clara e acolhedora.
+- Leia somente informações realmente visíveis nos documentos. Não invente notas,
+  matérias, erros, competências ou diagnósticos.
+- Observe notas por matéria, evolução entre períodos, padrões de erro, questões
+  resolvidas e conteúdos que precisam de reforço.
+- Escolha um nível de dificuldade entre: Reforço, Básico, Intermediário ou Avançado.
+- O índice deve representar somente a oportunidade estimada de evolução com
+  organização, estudo e prática. Ele nunca mede inteligência, capacidade,
+  valor pessoal ou um limite do aluno e não representa aumento garantido de nota.
+- Calcule o índice de 0 a 100 com prudência. Considere quantidade e qualidade dos
+  documentos, lacunas de aprendizagem, regularidade das notas e possibilidade de
+  melhora. Não escolha um número aleatório.
+- Se os documentos estiverem incompletos ou pouco legíveis, reduza a confiança da
+  análise e explique isso no resumo.
+- A mensagem formal deve explicar que X% é uma oportunidade educacional encontrada
+  nos documentos, e não uma nota sobre o aluno. A plataforma oferece organização,
+  explicações e prática; o progresso real é gradual e também depende da participação
+  do aluno, do tempo disponível e do acompanhamento escolar.
+- Crie um plano inicial de 5 dias, com sessões realistas de 20 a 45 minutos.
+- Não faça diagnóstico médico, psicológico ou de transtorno de aprendizagem.
+- Não diga que o aluno certamente melhorará uma porcentagem específica.
+
+Responda somente em JSON válido.
+`;
+
+    const schema = {
+        type: "OBJECT",
+        properties: {
+            indicePotencial: { type: "INTEGER" },
+            nivelDificuldade: { type: "STRING" },
+            confianca: { type: "STRING" },
+            resumo: { type: "STRING" },
+            mensagemFormal: { type: "STRING" },
+            pontosFortes: {
+                type: "ARRAY",
+                items: { type: "STRING" }
+            },
+            pontosAtencao: {
+                type: "ARRAY",
+                items: { type: "STRING" }
+            },
+            materiasPrioritarias: {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        materia: { type: "STRING" },
+                        situacao: { type: "STRING" },
+                        acao: { type: "STRING" }
+                    },
+                    required: ["materia", "situacao", "acao"]
+                }
+            },
+            planoSemanal: {
+                type: "ARRAY",
+                items: {
+                    type: "OBJECT",
+                    properties: {
+                        dia: { type: "STRING" },
+                        foco: { type: "STRING" },
+                        atividade: { type: "STRING" },
+                        minutos: { type: "INTEGER" }
+                    },
+                    required: ["dia", "foco", "atividade", "minutos"]
+                }
+            }
+        },
+        required: [
+            "indicePotencial",
+            "nivelDificuldade",
+            "confianca",
+            "resumo",
+            "mensagemFormal",
+            "pontosFortes",
+            "pontosAtencao",
+            "materiasPrioritarias",
+            "planoSemanal"
+        ]
+    };
+
+    const partesDosDocumentos = arquivosValidos.map(function (arquivo) {
+        return {
+            inlineData: {
+                mimeType: arquivo.mimeType,
+                data: arquivo.data
+            }
+        };
+    });
+
+    const resultado = await chamarGemini(
+        instrucao,
+        schema,
+        partesDosDocumentos
+    );
+
+    resultado.indicePotencial = Math.max(
+        0,
+        Math.min(100, Number(resultado.indicePotencial) || 0)
     );
 
     return res.status(200).json(resultado);
