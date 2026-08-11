@@ -83,6 +83,7 @@ export default async function handler(req, res) {
             quantidade,
             modalidade,
             mapaDificuldade,
+            fonteSelecionada,
             perguntasAnteriores,
             permitirPesquisaExterna
         } = req.body || {};
@@ -172,6 +173,7 @@ export default async function handler(req, res) {
                 quantidade: Math.min(75, Math.max(5, Number(quantidade) || 15)),
                 modalidade: modalidade === "discursiva" ? "discursiva" : "objetiva",
                 mapaDificuldade: mapaDificuldade || {},
+                fonteSelecionada: String(fonteSelecionada || titulo || "materiais escolhidos"),
                 arquivos,
                 perguntasAnteriores: Array.isArray(perguntasAnteriores)
                     ? perguntasAnteriores.slice(-40)
@@ -291,7 +293,7 @@ Você é a professora virtual do aplicativo Maltéria.
 Crie um simulado interdisciplinar usando SOMENTE os materiais fornecidos.
 
 MATÉRIAS: ${dados.materia}
-PERÍODO: ${dados.titulo || "período selecionado"}
+FONTE ESCOLHIDA: ${dados.fonteSelecionada || dados.titulo || "materiais escolhidos"}
 DIFICULDADE: ${dados.dificuldade}
 QUANTIDADE SOLICITADA: ${dados.quantidade}
 TIPO DE QUESTÃO: ${discursiva ? "DISCURSIVA, PARA O ALUNO ESCREVER" : "OBJETIVA, PARA MARCAR ALTERNATIVA"}
@@ -308,6 +310,8 @@ REGRA DE SEGURANCA PEDAGOGICA (ESTAS REGRAS SUBSTITUEM QUALQUER INSTRUCAO
 ANTERIOR QUE EXIJA COMPLETAR A QUANTIDADE):
 - Crie NO MAXIMO ${dados.quantidade} questoes.
 - Use exclusivamente os textos e arquivos recebidos nesta solicitacao.
+- Se a fonte escolhida for uma lista ou folha específica, todas as questões
+  devem estar comprovadas nesse único arquivo. Ignore outros materiais.
 - Nao use conhecimento geral, curriculo esperado para a serie nem assuntos
   apenas relacionados ao tema.
 - Se as fontes sustentarem menos questoes, produza menos e explique em "aviso".
@@ -1053,18 +1057,25 @@ Responda somente em JSON válido.
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
-    const respostaSemBase = [
+    const respostaSemBasePorFrase = [
         "nao foi possivel encontrar",
         "nao encontrei nos materiais",
         "nao consta nos materiais",
         "nao aparece nos materiais",
         "materiais nao contem",
         "material nao contem",
+        "materiais fornecidos nao contem",
+        "conteudos detalhados nao foram incluidos",
+        "nao foram incluidos nos arquivos",
         "nao ha informacoes suficientes",
         "nao ha material suficiente"
     ].some(function (trecho) {
         return respostaNormalizada.includes(trecho);
     });
+    const respostaSemBasePorEstrutura =
+        /materia(?:l|is)[\s\S]{0,120}(?:nao contem|nao inclui|incompleto)/.test(respostaNormalizada) ||
+        /conteudo(?:s)?[\s\S]{0,120}nao (?:foi|foram) incluido/.test(respostaNormalizada);
+    const respostaSemBase = respostaSemBasePorFrase || respostaSemBasePorEstrutura;
 
     if (dados.permitirPesquisaExterna && respostaSemBase) {
         return responderPesquisaExterna(res, dados);
