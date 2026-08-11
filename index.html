@@ -1277,23 +1277,25 @@
                 <section id="criador-simuladao" class="caixa criador-simuladao">
                     <div class="meta-bimestral-cabecalho">
                         <div>
-                            <small>PRÁTICA POR PERÍODO</small>
+                            <small>PRÁTICA BASEADA NO MATERIAL CERTO</small>
                             <h2>Simuladão de várias matérias</h2>
-                            <p>Escolha uma, algumas ou todas as matérias. A Maltéria distribui as questões e respeita o nível escolhido para cada disciplina.</p>
+                            <p>Escolha as matérias e indique exatamente quais materiais a Maltéria deve estudar antes de criar as questões.</p>
                         </div>
                         <span aria-hidden="true">🧠</span>
                     </div>
 
                     <div class="grade-configuracao-simuladao">
-                        <label>Período
-                            <select id="periodo-simuladao">
-                                <option value="7">Últimos 7 dias</option>
-                                <option value="14" selected>Últimas 2 semanas</option>
-                                <option value="30">Últimos 30 dias</option>
+                        <label>Usar como base
+                            <select id="fonte-simuladao">
+                                <option value="materiais" selected>Materiais das matérias escolhidas</option>
+                                <option value="lista">Uma lista específica</option>
+                                <option value="folha">Uma folha específica</option>
                             </select>
                         </label>
-                        <label>Data específica (opcional)
-                            <input id="data-simuladao" type="date">
+                        <label id="campo-arquivo-simuladao" class="escondido">Escolha a lista ou folha
+                            <select id="arquivo-simuladao" disabled>
+                                <option value="">Marque as matérias primeiro</option>
+                            </select>
                         </label>
                         <label>Estratégia geral
                             <select id="dificuldade-simuladao">
@@ -1314,6 +1316,8 @@
                             <input id="quantidade-simuladao" type="number" min="5" max="75" value="20" inputmode="numeric">
                         </label>
                     </div>
+
+                    <p id="status-fonte-simuladao" class="status-pesquisa" aria-live="polite"></p>
 
                     <fieldset class="materias-simuladao">
                         <legend>Matérias participantes e nível individual</legend>
