@@ -5147,6 +5147,19 @@ body {
     font-weight: 400;
 }
 
+#campo-arquivo-simuladao {
+    grid-column: 1 / -1;
+    padding: 14px;
+    border: 1px solid #d9ccff;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #fffaff, #f3fbff);
+}
+
+#status-fonte-simuladao {
+    margin: 4px 0 0;
+    color: #625b78;
+}
+
 .configurador-simulado-materia {
     display: grid;
     gap: 18px;
