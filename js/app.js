@@ -416,6 +416,11 @@ let clienteClassroom = null;
 let turmasClassroom = [];
 let atividadesPorTurma = {};
 let tentativaSilenciosaClassroom = false;
+let tokenClassroomExpiraEm = 0;
+let renovacaoTokenClassroomPendente = null;
+let resolverRenovacaoTokenClassroom = null;
+let rejeitarRenovacaoTokenClassroom = null;
+let temporizadorRenovacaoTokenClassroom = null;
 const recuperacaoSenhaAtiva = Boolean(
     window.MalteriaBanco &&
     window.MalteriaBanco.emRecuperacaoSenha &&
@@ -4725,9 +4730,7 @@ async function buscarTodosOsItensDoGoogleAgenda(enderecoBase) {
         const endereco = new URL(enderecoBase);
         if (tokenDaPagina) endereco.searchParams.set("pageToken", tokenDaPagina);
 
-        const resposta = await fetch(endereco.toString(), {
-            headers: { Authorization: "Bearer " + tokenClassroom }
-        });
+        const resposta = await buscarGoogleComToken(endereco.toString());
         const dados = await resposta.json();
 
         if (!resposta.ok) {
@@ -5528,6 +5531,13 @@ function prepararClienteClassroom() {
 
             error_callback:
                 function (erroGoogle) {
+                    concluirRenovacaoTokenClassroom(
+                        false,
+                        new Error(
+                            "Sua autorização do Google expirou. Clique em Reconectar ao Classroom e tente novamente."
+                        )
+                    );
+
                     if (tentativaSilenciosaClassroom) {
                         statusClassroom.textContent =
                             "Sua conta foi lembrada, mas o Google " +
@@ -5558,8 +5568,114 @@ function prepararClienteClassroom() {
     return true;
 }
 
+function concluirRenovacaoTokenClassroom(sucesso, valor) {
+    if (temporizadorRenovacaoTokenClassroom) {
+        clearTimeout(temporizadorRenovacaoTokenClassroom);
+        temporizadorRenovacaoTokenClassroom = null;
+    }
+
+    const resolver = resolverRenovacaoTokenClassroom;
+    const rejeitar = rejeitarRenovacaoTokenClassroom;
+    resolverRenovacaoTokenClassroom = null;
+    rejeitarRenovacaoTokenClassroom = null;
+
+    if (sucesso) {
+        resolver?.(valor);
+    } else {
+        rejeitar?.(valor instanceof Error ? valor : new Error(String(valor || "Não foi possível renovar o acesso ao Google.")));
+    }
+}
+
+function renovarTokenClassroomParaRequisicao() {
+    if (renovacaoTokenClassroomPendente) {
+        return renovacaoTokenClassroomPendente;
+    }
+
+    if (!prepararClienteClassroom()) {
+        return Promise.reject(
+            new Error("O Google ainda está carregando. Aguarde alguns segundos e tente novamente.")
+        );
+    }
+
+    renovacaoTokenClassroomPendente = new Promise(function (resolve, reject) {
+        resolverRenovacaoTokenClassroom = resolve;
+        rejeitarRenovacaoTokenClassroom = reject;
+        tentativaSilenciosaClassroom = true;
+
+        temporizadorRenovacaoTokenClassroom = setTimeout(function () {
+            concluirRenovacaoTokenClassroom(
+                false,
+                new Error("A conexão com o Google expirou. Clique em Reconectar ao Classroom e tente novamente.")
+            );
+        }, 15000);
+
+        try {
+            clienteClassroom.requestAccessToken({ prompt: "" });
+        } catch (erro) {
+            concluirRenovacaoTokenClassroom(
+                false,
+                new Error("A conexão com o Google expirou. Clique em Reconectar ao Classroom e tente novamente.")
+            );
+        }
+    }).finally(function () {
+        renovacaoTokenClassroomPendente = null;
+    });
+
+    return renovacaoTokenClassroomPendente;
+}
+
+async function buscarGoogleComToken(endereco, opcoes = {}) {
+    if (
+        !tokenClassroom ||
+        (tokenClassroomExpiraEm && Date.now() >= tokenClassroomExpiraEm - 60000)
+    ) {
+        await renovarTokenClassroomParaRequisicao();
+    }
+
+    async function executar() {
+        return fetch(endereco, {
+            ...opcoes,
+            headers: {
+                ...(opcoes.headers || {}),
+                Authorization: "Bearer " + tokenClassroom
+            }
+        });
+    }
+
+    let resposta = await executar();
+
+    if (resposta.status === 401) {
+        tokenClassroom = "";
+        tokenClassroomExpiraEm = 0;
+
+        try {
+            await renovarTokenClassroomParaRequisicao();
+            resposta = await executar();
+        } catch (erro) {
+            cartaoClassroom.classList.remove("conectado", "carregando");
+            textoClassroom.textContent = "Reconectar ao Classroom";
+            statusClassroom.textContent =
+                "Sua autorização expirou. Reconecte a conta escolar para continuar.";
+            throw erro;
+        }
+    }
+
+    if (resposta.status === 401) {
+        cartaoClassroom.classList.remove("conectado", "carregando");
+        textoClassroom.textContent = "Reconectar ao Classroom";
+        statusClassroom.textContent =
+            "O Google encerrou esta autorização. Reconecte a conta escolar para continuar.";
+        throw new Error(
+            "O acesso ao Google expirou. Clique em Reconectar ao Classroom e tente novamente."
+        );
+    }
+
+    return resposta;
+}
+
 async function restaurarConexaoClassroom() {
     tokenClassroom = "";
+    tokenClassroomExpiraEm = 0;
     clienteClassroom = null;
     atividadesPorTurma = {};
 
@@ -5654,9 +5770,14 @@ function conectarClassroom() {
 }
 
 async function receberTokenClassroom(resposta) {
+    const renovacaoParaRequisicao = Boolean(resolverRenovacaoTokenClassroom);
     tentativaSilenciosaClassroom = false;
 
     if (resposta.error) {
+        concluirRenovacaoTokenClassroom(
+            false,
+            new Error("O Google não autorizou a renovação. Reconecte o Classroom e tente novamente.")
+        );
         statusClassroom.textContent =
             "O Google não autorizou o acesso.";
 
@@ -5671,6 +5792,8 @@ async function receberTokenClassroom(resposta) {
     }
 
     tokenClassroom = resposta.access_token;
+    tokenClassroomExpiraEm = Date.now() + (Number(resposta.expires_in) || 3600) * 1000;
+    concluirRenovacaoTokenClassroom(true, tokenClassroom);
 
     textoClassroom.textContent =
         "Classroom conectado";
@@ -5680,6 +5803,11 @@ async function receberTokenClassroom(resposta) {
 
     statusClassroom.textContent =
         "Classroom conectado. Confirmando a conta...";
+
+    if (renovacaoParaRequisicao) {
+        statusClassroom.textContent = "Conexão com o Classroom renovada.";
+        return;
+    }
 
     try {
         await confirmarIdentidadeGoogle();
@@ -5774,15 +5902,9 @@ async function confirmarIdentidadeGoogle() {
 }
 
 async function chamarClassroom(caminho) {
-    const resposta = await fetch(
+    const resposta = await buscarGoogleComToken(
         "https://classroom.googleapis.com/v1/" +
-        caminho,
-        {
-            headers: {
-                Authorization:
-                    "Bearer " + tokenClassroom
-            }
-        }
+        caminho
     );
 
     const dados = await resposta.json();
@@ -7704,16 +7826,10 @@ function recolherAnexos(
 }
 
 async function lerArquivoDoDrive(id) {
-    const metadadosResposta = await fetch(
+    const metadadosResposta = await buscarGoogleComToken(
         "https://www.googleapis.com/drive/v3/files/" +
         encodeURIComponent(id) +
-        "?fields=id,name,mimeType",
-        {
-            headers: {
-                Authorization:
-                    "Bearer " + tokenClassroom
-            }
-        }
+        "?fields=id,name,mimeType"
     );
 
     const metadados =
@@ -7754,15 +7870,10 @@ async function lerArquivoDoDrive(id) {
             encodeURIComponent(id) +
             "?alt=media";
     } else if (tipo === "application/pdf") {
-        const respostaPdf = await fetch(
+        const respostaPdf = await buscarGoogleComToken(
             "https://www.googleapis.com/drive/v3/files/" +
             encodeURIComponent(id) +
-            "?alt=media",
-            {
-                headers: {
-                    Authorization: "Bearer " + tokenClassroom
-                }
-            }
+            "?alt=media"
         );
 
         if (!respostaPdf.ok) {
@@ -7799,15 +7910,7 @@ async function lerArquivoDoDrive(id) {
         );
     }
 
-    const arquivoResposta = await fetch(
-        endereco,
-        {
-            headers: {
-                Authorization:
-                    "Bearer " + tokenClassroom
-            }
-        }
-    );
+    const arquivoResposta = await buscarGoogleComToken(endereco);
 
     if (!arquivoResposta.ok) {
         const erro =
