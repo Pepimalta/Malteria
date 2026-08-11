@@ -421,6 +421,9 @@ let renovacaoTokenClassroomPendente = null;
 let resolverRenovacaoTokenClassroom = null;
 let rejeitarRenovacaoTokenClassroom = null;
 let temporizadorRenovacaoTokenClassroom = null;
+let arquivosFonteSimuladao = [];
+let sequenciaBuscaFonteSimuladao = 0;
+let temporizadorBuscaFonteSimuladao = null;
 const recuperacaoSenhaAtiva = Boolean(
     window.MalteriaBanco &&
     window.MalteriaBanco.emRecuperacaoSenha &&
@@ -8408,6 +8411,10 @@ document
     .querySelector("#quantidade-simuladao")
     .addEventListener("change", atualizarRecomendacaoSimuladao);
 
+document
+    .querySelector("#fonte-simuladao")
+    .addEventListener("change", atualizarArquivosFonteSimuladao);
+
 [
     "#bimestre-meta",
     "#media-atual-meta",
@@ -8768,6 +8775,7 @@ function preencherMateriasSimuladao() {
             const seletor = area.querySelector('[data-nivel-materia="' + campo.value + '"]');
             if (seletor) seletor.disabled = !campo.checked;
             atualizarRecomendacaoSimuladao();
+            agendarAtualizacaoArquivosFonteSimuladao();
         });
     });
 
@@ -8776,6 +8784,7 @@ function preencherMateriasSimuladao() {
     });
 
     atualizarRecomendacaoSimuladao();
+    agendarAtualizacaoArquivosFonteSimuladao();
 }
 
 function alternarTodasMateriasSimuladao() {
@@ -8793,6 +8802,152 @@ function alternarTodasMateriasSimuladao() {
     document.querySelector("#selecionar-todas-materias").textContent =
         selecionar ? "Limpar seleção" : "Selecionar todas";
     atualizarRecomendacaoSimuladao();
+    agendarAtualizacaoArquivosFonteSimuladao();
+}
+
+function agendarAtualizacaoArquivosFonteSimuladao() {
+    clearTimeout(temporizadorBuscaFonteSimuladao);
+    temporizadorBuscaFonteSimuladao = setTimeout(function () {
+        atualizarArquivosFonteSimuladao();
+    }, 250);
+}
+
+function arquivoCombinaComFonteSimuladao(arquivo, fonte) {
+    const texto = normalizarPesquisa(
+        [arquivo.nome, arquivo.publicacao, arquivo.materiaNome].filter(Boolean).join(" ")
+    );
+
+    if (fonte === "lista") {
+        return /lista|exercicio|atividade|revisao|roteiro|questoes/.test(texto);
+    }
+
+    if (fonte === "folha") {
+        return /folha|ficha|apostila|material impresso/.test(texto);
+    }
+
+    return true;
+}
+
+function recolherArquivosDaPublicacaoSimuladao(publicacao, materia, destino) {
+    (publicacao.materials || []).forEach(function (material) {
+        const drive = material.driveFile?.driveFile;
+        if (!drive?.id) return;
+
+        destino.push({
+            id: drive.id,
+            nome: drive.title || publicacao.title || "Arquivo do Classroom",
+            publicacao: publicacao.title || "Material do Classroom",
+            materiaId: materia.id,
+            materiaNome: materia.name
+        });
+    });
+}
+
+async function atualizarArquivosFonteSimuladao() {
+    const fonte = document.querySelector("#fonte-simuladao")?.value || "materiais";
+    const campo = document.querySelector("#campo-arquivo-simuladao");
+    const seletor = document.querySelector("#arquivo-simuladao");
+    const status = document.querySelector("#status-fonte-simuladao");
+
+    if (!campo || !seletor || !status) return;
+
+    if (fonte === "materiais") {
+        campo.classList.add("escondido");
+        seletor.disabled = true;
+        seletor.innerHTML = '<option value="">Todos os materiais encontrados</option>';
+        status.textContent = "A Maltéria usará somente os materiais reais das matérias marcadas.";
+        arquivosFonteSimuladao = [];
+        return;
+    }
+
+    campo.classList.remove("escondido");
+    const ids = Array.from(
+        document.querySelectorAll('input[name="materia-simuladao"]:checked')
+    ).map(function (item) { return String(item.value); });
+
+    if (!ids.length) {
+        seletor.disabled = true;
+        seletor.innerHTML = '<option value="">Marque pelo menos uma matéria</option>';
+        status.textContent = "Marque as matérias para procurar as listas e folhas delas.";
+        arquivosFonteSimuladao = [];
+        return;
+    }
+
+    if (!tokenClassroom) {
+        seletor.disabled = true;
+        seletor.innerHTML = '<option value="">Conecte o Classroom</option>';
+        status.textContent = "Conecte o Classroom para procurar os arquivos.";
+        return;
+    }
+
+    const minhaSequencia = ++sequenciaBuscaFonteSimuladao;
+    seletor.disabled = true;
+    seletor.innerHTML = '<option value="">Procurando arquivos...</option>';
+    status.textContent = "Lendo as publicações das matérias escolhidas...";
+
+    try {
+        const materias = turmasClassroom.filter(function (turma) {
+            return ids.includes(String(turma.id));
+        });
+        const encontrados = [];
+
+        for (const materia of materias) {
+            const respostas = await Promise.all([
+                chamarClassroomPaginado(
+                    "courses/" + materia.id + "/courseWork?pageSize=100",
+                    "courseWork"
+                ),
+                chamarClassroomPaginado(
+                    "courses/" + materia.id + "/courseWorkMaterials?pageSize=100",
+                    "courseWorkMaterial"
+                )
+            ]);
+
+            respostas.flat().forEach(function (publicacao) {
+                recolherArquivosDaPublicacaoSimuladao(publicacao, materia, encontrados);
+            });
+        }
+
+        if (minhaSequencia !== sequenciaBuscaFonteSimuladao) return;
+
+        const unicos = Array.from(new Map(encontrados.map(function (arquivo) {
+            return [arquivo.id, arquivo];
+        })).values());
+        arquivosFonteSimuladao = unicos
+            .filter(function (arquivo) {
+                return arquivoCombinaComFonteSimuladao(arquivo, fonte);
+            })
+            .sort(function (a, b) {
+                return a.materiaNome.localeCompare(b.materiaNome, "pt-BR") ||
+                    a.nome.localeCompare(b.nome, "pt-BR");
+            });
+
+        if (!arquivosFonteSimuladao.length) {
+            seletor.innerHTML = '<option value="">Nenhuma ' +
+                (fonte === "lista" ? "lista" : "folha") +
+                ' encontrada</option>';
+            status.textContent = "Não encontrei um arquivo identificado como " +
+                (fonte === "lista" ? "lista" : "folha") +
+                " nas matérias marcadas.";
+            return;
+        }
+
+        seletor.innerHTML = '<option value="">Escolha um arquivo</option>' +
+            arquivosFonteSimuladao.map(function (arquivo) {
+                return '<option value="' + protegerTexto(arquivo.id) + '">' +
+                    protegerTexto(arquivo.materiaNome + " — " + arquivo.nome) +
+                    '</option>';
+            }).join("");
+        seletor.disabled = false;
+        status.textContent = arquivosFonteSimuladao.length +
+            (arquivosFonteSimuladao.length === 1
+                ? " arquivo encontrado."
+                : " arquivos encontrados.");
+    } catch (erro) {
+        if (minhaSequencia !== sequenciaBuscaFonteSimuladao) return;
+        seletor.innerHTML = '<option value="">Não foi possível carregar</option>';
+        status.textContent = traduzirErroDaInteligencia(erro.message);
+    }
 }
 
 function recomendarNivelDaMateria(nomeMateria) {
@@ -8955,15 +9110,27 @@ async function criarSimuladaoGeral() {
     const materias = turmasClassroom.filter(function (turma) {
         return ids.includes(String(turma.id));
     });
-    const dias = Number(document.querySelector("#periodo-simuladao").value) || 14;
     const configuracao = configuracaoDoSimuladao(materias);
     const dificuldade = configuracao.estrategia;
     const modalidade = document.querySelector("#modalidade-simuladao").value;
     const modalidadeIA = modalidade === "manual" ? "discursiva" : modalidade;
-    const dataEspecifica = document.querySelector("#data-simuladao").value;
-    const fim = dataEspecifica ? new Date(dataEspecifica + "T12:00:00") : new Date();
-    const inicio = new Date(fim);
-    if (!dataEspecifica) inicio.setDate(inicio.getDate() - (dias - 1));
+    const fonte = document.querySelector("#fonte-simuladao").value;
+    const arquivoId = document.querySelector("#arquivo-simuladao").value;
+    const arquivoEscolhido = arquivosFonteSimuladao.find(function (arquivo) {
+        return String(arquivo.id) === String(arquivoId);
+    });
+
+    if (fonte !== "materiais" && !arquivoEscolhido) {
+        status.textContent = "Escolha a " + (fonte === "lista" ? "lista" : "folha") +
+            " que servirá de base para o Simuladão.";
+        return;
+    }
+
+    const rotuloFonte = fonte === "lista"
+        ? "Lista específica: " + arquivoEscolhido.nome
+        : fonte === "folha"
+            ? "Folha específica: " + arquivoEscolhido.nome
+            : "Materiais das matérias escolhidas";
 
     botao.disabled = true;
     area.classList.add("escondido");
@@ -8971,18 +9138,18 @@ async function criarSimuladaoGeral() {
 
     try {
         arquivosPdfParaIA = [];
-        const conteudo = await obterConteudoSimuladao(
-            materias,
-            dataParaCampo(inicio),
-            dataParaCampo(fim)
-        );
+        const conteudo = await obterConteudoSimuladao(materias, {
+            fonte: fonte,
+            arquivo: arquivoEscolhido || null
+        });
 
         status.textContent = "Criando " + configuracao.quantidade + " questões com níveis ajustados por matéria...";
 
         const dados = await gerarQuestoesEmLotes({
             tipo: "simuladao",
             materia: materias.map(function (item) { return item.name; }).join(", "),
-            titulo: "Simuladão dos últimos " + dias + " dias",
+            titulo: "Simuladão baseado em " + rotuloFonte,
+            fonteSelecionada: rotuloFonte,
             conteudo: conteudo,
             dificuldade: dificuldade,
             modalidade: modalidadeIA,
@@ -8994,16 +9161,15 @@ async function criarSimuladaoGeral() {
                 area: area,
                 titulo: "Simuladão para fazer à mão",
                 materias: materias.map(function (item) { return item.name; }),
-                inicio: dataParaCampo(inicio),
-                fim: dataParaCampo(fim)
+                fonte: rotuloFonte
             });
         } else {
             desenharSimuladaoInterativo(dados, {
-                dias: dias,
                 dificuldade: dificuldade,
                 modalidade: modalidade,
                 tipoRegistro: "simuladao",
-                materias: materias.map(function (item) { return item.name; })
+                materias: materias.map(function (item) { return item.name; }),
+                fonte: rotuloFonte
             });
         }
         status.textContent = "Simuladão pronto. Faça no seu ritmo.";
@@ -9015,9 +9181,34 @@ async function criarSimuladaoGeral() {
     }
 }
 
-async function obterConteudoSimuladao(materias, inicio, fim) {
+async function obterConteudoSimuladao(materias, inicioOuOpcoes, fimAntigo) {
+    const opcoes = inicioOuOpcoes && typeof inicioOuOpcoes === "object"
+        ? inicioOuOpcoes
+        : { fonte: "materiais", inicio: inicioOuOpcoes, fim: fimAntigo };
+    const fonte = opcoes.fonte || "materiais";
+    const inicio = opcoes.inicio || "";
+    const fim = opcoes.fim || "";
+    const usarPeriodo = Boolean(inicio && fim);
     let anexosLidos = 0;
-    let texto = `SIMULADÃO MALTÉRIA\nPERÍODO: ${inicio} até ${fim}\n`;
+    let texto = usarPeriodo
+        ? `SIMULADÃO MALTÉRIA\nPERÍODO: ${inicio} até ${fim}\n`
+        : "SIMULADÃO MALTÉRIA\nSEM FILTRO DE DATA: use somente as fontes indicadas abaixo.\n";
+
+    if (fonte !== "materiais") {
+        const arquivo = opcoes.arquivo;
+        if (!arquivo?.id) {
+            throw new Error("Escolha a lista ou folha que servirá de base para o Simuladão.");
+        }
+
+        const conteudoArquivo = await lerArquivoDoDrive(arquivo.id);
+        texto += "\nFONTE ÚNICA OBRIGATÓRIA: " + arquivo.nome +
+            "\nTIPO DE FONTE: " + (fonte === "lista" ? "lista" : "folha") +
+            "\nMATÉRIA: " + (arquivo.materiaNome || "matéria escolhida") +
+            "\nPUBLICAÇÃO: " + (arquivo.publicacao || "Classroom") +
+            "\nCONTEÚDO REAL DO ARQUIVO:\n" + conteudoArquivo +
+            "\n\nREGRA: nenhuma questão pode usar conteúdo que não esteja comprovado neste arquivo.\n";
+        return texto.slice(0, 60000);
+    }
 
     for (const materia of materias) {
         const respostas = await Promise.all([
@@ -9025,12 +9216,23 @@ async function obterConteudoSimuladao(materias, inicio, fim) {
             chamarClassroom("courses/" + materia.id + "/courseWorkMaterials?pageSize=100")
         ]);
         const periodo = { inicio: inicio, fim: fim };
-        const atividades = (respostas[0].courseWork || [])
-            .filter(function (item) { return itemEstaNoPeriodoDeEstudo(item, periodo); })
-            .slice(0, 12);
-        const materiais = (respostas[1].courseWorkMaterial || [])
-            .filter(function (item) { return itemEstaNoPeriodoDeEstudo(item, periodo); })
-            .slice(0, 12);
+        const ordenarRecentes = function (itens) {
+            return itens.slice().sort(function (a, b) {
+                const dataA = String(a.updateTime || a.creationTime || "");
+                const dataB = String(b.updateTime || b.creationTime || "");
+                return dataB.localeCompare(dataA);
+            });
+        };
+        const atividades = ordenarRecentes(respostas[0].courseWork || [])
+            .filter(function (item) {
+                return !usarPeriodo || itemEstaNoPeriodoDeEstudo(item, periodo);
+            })
+            .slice(0, 20);
+        const materiais = ordenarRecentes(respostas[1].courseWorkMaterial || [])
+            .filter(function (item) {
+                return !usarPeriodo || itemEstaNoPeriodoDeEstudo(item, periodo);
+            })
+            .slice(0, 20);
         const anexos = [];
 
         texto += `\n=== ${materia.name} ===\n`;
@@ -9064,7 +9266,7 @@ async function obterConteudoSimuladao(materias, inicio, fim) {
 
         const uploads = uploadsDaSessao.filter(function (upload) {
             return String(upload.materiaId) === String(materia.id) &&
-                (!upload.data || (upload.data >= inicio && upload.data <= fim));
+                (!usarPeriodo || !upload.data || (upload.data >= inicio && upload.data <= fim));
         });
 
         uploads.forEach(function (upload) {
@@ -9075,14 +9277,16 @@ async function obterConteudoSimuladao(materias, inicio, fim) {
         });
 
         if (atividades.length + materiais.length === 0) {
-            texto += "Nenhum item publicado dentro deste período.\n";
+            texto += usarPeriodo
+                ? "Nenhum item publicado dentro deste período.\n"
+                : "Nenhum material foi encontrado para esta matéria.\n";
         }
     }
 
     texto += "\nANEXOS LIDOS OU ENVIADOS PARA A IA: " + anexosLidos + "\n";
 
     if (texto.length < 240) {
-        throw new Error("Não encontrei material suficiente no período escolhido.");
+        throw new Error("Não encontrei material suficiente nas fontes escolhidas.");
     }
 
     return texto.slice(0, 60000);
