@@ -8906,16 +8906,25 @@ function preencherMateriasSimuladao() {
     area.innerHTML = turmas.map(function (turma) {
         return `
             <article class="materia-configuracao-simuladao">
-                <label>
+                <label class="selecao-materia-simuladao">
                     <input type="checkbox" name="materia-simuladao" value="${protegerTexto(turma.id)}">
                     <span>${protegerTexto(turma.name)}</span>
                 </label>
-                <select data-nivel-materia="${protegerTexto(turma.id)}" aria-label="Nível de ${protegerTexto(turma.name)}" disabled>
-                    <option value="auto" selected>Seguir recomendação</option>
-                    <option value="reforco">Reforço</option>
-                    <option value="gradual">Gradual</option>
-                    <option value="desafio">Desafio</option>
-                </select>
+                <div class="controles-materia-simuladao">
+                    <label>Nível
+                        <select data-nivel-materia="${protegerTexto(turma.id)}" aria-label="Nível de ${protegerTexto(turma.name)}" disabled>
+                            <option value="auto" selected>Seguir recomendação</option>
+                            <option value="reforco">Reforço</option>
+                            <option value="gradual">Gradual</option>
+                            <option value="desafio">Desafio</option>
+                        </select>
+                    </label>
+                    <label>Material específico desta matéria
+                        <select data-folha-materia="${protegerTexto(turma.id)}" aria-label="Material de ${protegerTexto(turma.name)}" disabled>
+                            <option value="">Todos os materiais da matéria</option>
+                        </select>
+                    </label>
+                </div>
             </article>
         `;
     }).join("");
@@ -8924,6 +8933,8 @@ function preencherMateriasSimuladao() {
         campo.addEventListener("change", function () {
             const seletor = area.querySelector('[data-nivel-materia="' + campo.value + '"]');
             if (seletor) seletor.disabled = !campo.checked;
+            const seletorFolha = area.querySelector('[data-folha-materia="' + campo.value + '"]');
+            if (seletorFolha) seletorFolha.disabled = !campo.checked;
             atualizarRecomendacaoSimuladao();
             agendarAtualizacaoArquivosFonteSimuladao();
         });
@@ -8947,6 +8958,8 @@ function alternarTodasMateriasSimuladao() {
         campo.checked = selecionar;
         const seletor = document.querySelector('[data-nivel-materia="' + campo.value + '"]');
         if (seletor) seletor.disabled = !selecionar;
+        const seletorFolha = document.querySelector('[data-folha-materia="' + campo.value + '"]');
+        if (seletorFolha) seletorFolha.disabled = !selecionar;
     });
 
     document.querySelector("#selecionar-todas-materias").textContent =
@@ -8973,6 +8986,14 @@ function arquivoCombinaComFonteSimuladao(arquivo, fonte) {
 
     if (fonte === "folha") {
         return /folha|ficha|apostila|material impresso/.test(texto);
+    }
+
+    if (fonte === "slide") {
+        return /slide|apresentacao|presentation|powerpoint|google slides/.test(texto);
+    }
+
+    if (fonte === "arquivo") {
+        return true;
     }
 
     return true;
@@ -9005,12 +9026,9 @@ async function atualizarArquivosFonteSimuladao() {
         campo.classList.add("escondido");
         seletor.disabled = true;
         seletor.innerHTML = '<option value="">Todos os materiais encontrados</option>';
-        status.textContent = "A Maltéria usará somente os materiais reais das matérias marcadas.";
-        arquivosFonteSimuladao = [];
-        return;
+    } else {
+        campo.classList.remove("escondido");
     }
-
-    campo.classList.remove("escondido");
     const ids = Array.from(
         document.querySelectorAll('input[name="materia-simuladao"]:checked')
     ).map(function (item) { return String(item.value); });
@@ -9018,7 +9036,7 @@ async function atualizarArquivosFonteSimuladao() {
     if (!ids.length) {
         seletor.disabled = true;
         seletor.innerHTML = '<option value="">Marque pelo menos uma matéria</option>';
-        status.textContent = "Marque as matérias para procurar as listas e folhas delas.";
+        status.textContent = "Marque as matérias para procurar folhas, listas, slides, PDFs e outros arquivos.";
         arquivosFonteSimuladao = [];
         return;
     }
@@ -9072,13 +9090,18 @@ async function atualizarArquivosFonteSimuladao() {
                     a.nome.localeCompare(b.nome, "pt-BR");
             });
 
-        if (!arquivosFonteSimuladao.length) {
-            seletor.innerHTML = '<option value="">Nenhuma ' +
-                (fonte === "lista" ? "lista" : "folha") +
-                ' encontrada</option>';
-            status.textContent = "Não encontrei um arquivo identificado como " +
-                (fonte === "lista" ? "lista" : "folha") +
-                " nas matérias marcadas.";
+        preencherSeletoresFolhaPorMateria();
+
+        if (!arquivosFonteSimuladao.length && fonte !== "materiais") {
+            seletor.innerHTML = '<option value="">Nenhum material desse tipo encontrado</option>';
+            status.textContent = "Não encontrei esse tipo de material nas matérias marcadas.";
+            return;
+        }
+
+        if (fonte === "materiais") {
+            status.textContent = arquivosFonteSimuladao.length
+                ? "Escolha um material em cada matéria ou mantenha todos os materiais."
+                : "A Maltéria usará todos os materiais reais encontrados nas matérias marcadas.";
             return;
         }
 
@@ -9098,6 +9121,39 @@ async function atualizarArquivosFonteSimuladao() {
         seletor.innerHTML = '<option value="">Não foi possível carregar</option>';
         status.textContent = traduzirErroDaInteligencia(erro.message);
     }
+}
+
+function preencherSeletoresFolhaPorMateria() {
+    document.querySelectorAll("[data-folha-materia]").forEach(function (seletor) {
+        const materiaId = String(seletor.dataset.folhaMateria || "");
+        const valorAnterior = seletor.value;
+        const arquivos = arquivosFonteSimuladao.filter(function (arquivo) {
+            return String(arquivo.materiaId) === materiaId;
+        });
+
+        seletor.innerHTML = '<option value="">Todos os conteúdos da matéria</option>' +
+            arquivos.map(function (arquivo) {
+                const nomeNormalizado = normalizarPesquisa(arquivo.nome || "");
+                const tipo = /slide|apresentacao|presentation|powerpoint|google slides/.test(nomeNormalizado)
+                    ? "📽️ Slide — "
+                    : /lista|exercicio|atividade|questoes/.test(nomeNormalizado)
+                        ? "📝 Lista — "
+                        : /folha|ficha|apostila/.test(nomeNormalizado)
+                            ? "📄 Folha — "
+                            : /pdf/.test(nomeNormalizado)
+                                ? "📕 PDF — "
+                                : "📎 Arquivo — ";
+                return '<option value="' + protegerTexto(arquivo.id) + '">' +
+                    protegerTexto(tipo + arquivo.nome) + '</option>';
+            }).join("");
+
+        if (arquivos.some(function (arquivo) { return String(arquivo.id) === valorAnterior; })) {
+            seletor.value = valorAnterior;
+        }
+
+        const caixa = document.querySelector('input[name="materia-simuladao"][value="' + materiaId + '"]');
+        seletor.disabled = !caixa?.checked;
+    });
 }
 
 function recomendarNivelDaMateria(nomeMateria) {
@@ -9145,21 +9201,132 @@ function limitarQuantidadeQuestoes(valor) {
     return Math.min(75, Math.max(5, Math.round(Number(valor) || 5)));
 }
 
+function idiomaDaMateriaSimuladao(nomeMateria, conteudoMateria) {
+    const nome = normalizarPesquisa(nomeMateria);
+    if (/\bgeography\b|\benglish\b|\bingles\b/.test(nome)) return "ingles";
+
+    const texto = String(conteudoMateria || "");
+    const palavrasIngles = (texto.match(/\b(the|and|with|from|this|that|what|which|because|write|read)\b/gi) || []).length;
+    const palavrasPortugues = (texto.match(/\b(que|com|para|uma|como|porque|leia|escreva|atividade|material)\b/gi) || []).length;
+    return palavrasIngles > palavrasPortugues * 1.4 && palavrasIngles >= 5
+        ? "ingles"
+        : "portugues";
+}
+
+function trechoDaMateriaNoConteudoSimuladao(conteudo, nomeMateria) {
+    const texto = String(conteudo || "");
+    const marcador = "=== " + nomeMateria + " ===";
+    const inicio = texto.indexOf(marcador);
+    if (inicio < 0) return "";
+    const proximo = texto.indexOf("\n=== ", inicio + marcador.length);
+    return texto.slice(inicio, proximo < 0 ? texto.length : proximo);
+}
+
+function calcularDistribuicaoExataSimuladao(materias, quantidadeTotal, conteudo) {
+    if (quantidadeTotal < materias.length) {
+        throw new Error(
+            "Escolha pelo menos " + materias.length +
+            " questões para que cada matéria receba ao menos uma."
+        );
+    }
+
+    const base = Math.floor(quantidadeTotal / materias.length);
+    const extras = quantidadeTotal % materias.length;
+    const avaliadas = materias.map(function (materia, indice) {
+        const trecho = trechoDaMateriaNoConteudoSimuladao(conteudo, materia.name);
+        const arquivos = arquivosFonteSimuladao.filter(function (arquivo) {
+            return String(arquivo.materiaId) === String(materia.id);
+        }).length;
+        return {
+            materia: materia,
+            indice: indice,
+            volume: trecho.length + arquivos * 500
+        };
+    }).sort(function (a, b) {
+        return b.volume - a.volume || a.indice - b.indice;
+    });
+
+    const mapaQuantidade = {};
+    materias.forEach(function (materia) {
+        mapaQuantidade[materia.name] = base;
+    });
+    avaliadas.slice(0, extras).forEach(function (item) {
+        mapaQuantidade[item.materia.name] += 1;
+    });
+
+    const mapaIdioma = {};
+    materias.forEach(function (materia) {
+        mapaIdioma[materia.name] = idiomaDaMateriaSimuladao(
+            materia.name,
+            trechoDaMateriaNoConteudoSimuladao(conteudo, materia.name)
+        );
+    });
+
+    return { mapaQuantidade: mapaQuantidade, mapaIdioma: mapaIdioma };
+}
+
+function localizarMateriaPlanejadaSimuladao(nomeRecebido, nomesPlanejados) {
+    const recebido = normalizarPesquisa(nomeRecebido || "");
+    return nomesPlanejados.find(function (nome) {
+        const normalizado = normalizarPesquisa(nome);
+        return recebido === normalizado || recebido.includes(normalizado) || normalizado.includes(recebido);
+    }) || "";
+}
+
+function planoDoProximoLoteSimuladao(mapaTotal, questoes, tamanhoMaximo) {
+    const nomes = Object.keys(mapaTotal);
+    const usados = Object.fromEntries(nomes.map(function (nome) { return [nome, 0]; }));
+    questoes.forEach(function (questao) {
+        const nome = localizarMateriaPlanejadaSimuladao(questao.materia, nomes);
+        if (nome) usados[nome] += 1;
+    });
+
+    const restantes = Object.fromEntries(nomes.map(function (nome) {
+        return [nome, Math.max(0, Number(mapaTotal[nome]) - usados[nome])];
+    }));
+    const lote = Object.fromEntries(nomes.map(function (nome) { return [nome, 0]; }));
+    let vagas = Math.min(tamanhoMaximo, Object.values(restantes).reduce(function (a, b) { return a + b; }, 0));
+
+    while (vagas > 0) {
+        let mudou = false;
+        nomes.slice().sort(function (a, b) {
+            return (restantes[b] - lote[b]) - (restantes[a] - lote[a]);
+        }).forEach(function (nome) {
+            if (vagas > 0 && lote[nome] < restantes[nome]) {
+                lote[nome] += 1;
+                vagas -= 1;
+                mudou = true;
+            }
+        });
+        if (!mudou) break;
+    }
+
+    return lote;
+}
+
 async function gerarQuestoesEmLotes(payload, quantidadeTotal) {
     const questoes = [];
     const orientacoes = [];
-    const tamanhoDoLote = 20;
+    const tamanhoDoLote = 15;
     let tentativas = 0;
+    let tentativasSemProgresso = 0;
+    const maximoTentativas = Math.max(7, Math.ceil(quantidadeTotal / 8) + 4);
 
-    while (questoes.length < quantidadeTotal && tentativas < 5) {
+    while (questoes.length < quantidadeTotal && tentativas < maximoTentativas) {
         tentativas++;
-        const quantidade = Math.min(tamanhoDoLote, quantidadeTotal - questoes.length);
+        const mapaQuantidadeLote = planoDoProximoLoteSimuladao(
+            payload.mapaQuantidade,
+            questoes,
+            Math.min(tamanhoDoLote, quantidadeTotal - questoes.length)
+        );
+        const quantidade = Object.values(mapaQuantidadeLote).reduce(function (a, b) { return a + b; }, 0);
         const resposta = await fetch(ENDERECO_IA, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 ...payload,
                 quantidade: quantidade,
+                mapaQuantidade: mapaQuantidadeLote,
                 arquivos: arquivosPdfParaIA,
                 perguntasAnteriores: questoes.map(function (questao) {
                     return questao.pergunta || "";
@@ -9187,30 +9354,58 @@ async function gerarQuestoesEmLotes(payload, quantidadeTotal) {
         const chavesExistentes = new Set(questoes.map(function (questao) {
             return normalizarPesquisa(questao.pergunta || "");
         }));
+        const nomesPlanejados = Object.keys(payload.mapaQuantidade);
+        const contagemAtual = Object.fromEntries(nomesPlanejados.map(function (nome) { return [nome, 0]; }));
+        questoes.forEach(function (questao) {
+            const nome = localizarMateriaPlanejadaSimuladao(questao.materia, nomesPlanejados);
+            if (nome) contagemAtual[nome] += 1;
+        });
         const comprovadasENovas = novas.filter(function (questao) {
             const chave = normalizarPesquisa(questao.pergunta || "");
-            return Boolean(
+            const materiaPlanejada = localizarMateriaPlanejadaSimuladao(questao.materia, nomesPlanejados);
+            const aceita = Boolean(
                 chave &&
                 questao.fonte &&
                 questao.evidencia &&
+                materiaPlanejada &&
+                contagemAtual[materiaPlanejada] < Number(payload.mapaQuantidade[materiaPlanejada]) &&
                 !chavesExistentes.has(chave)
             );
+            if (aceita) {
+                chavesExistentes.add(chave);
+                contagemAtual[materiaPlanejada] += 1;
+                questao.materia = materiaPlanejada;
+            }
+            return aceita;
         });
 
+        const antes = questoes.length;
         questoes.push(...comprovadasENovas.slice(0, quantidade));
         if (dados.orientacao) orientacoes.push(dados.orientacao);
         if (dados.aviso) orientacoes.push(dados.aviso);
 
-        if (comprovadasENovas.length < quantidade) break;
+        tentativasSemProgresso = questoes.length === antes
+            ? tentativasSemProgresso + 1
+            : 0;
+        if (tentativasSemProgresso >= 3) break;
     }
+
+    if (questoes.length !== quantidadeTotal) {
+        throw new Error(
+            "A Maltéria conseguiu comprovar " + questoes.length + " das " + quantidadeTotal +
+            " questões solicitadas. O simulado não será aberto incompleto. Escolha mais materiais ou outra folha e tente novamente."
+        );
+    }
+
+    const ordemMaterias = Object.keys(payload.mapaQuantidade || {});
+    questoes.sort(function (a, b) {
+        return ordemMaterias.indexOf(a.materia) - ordemMaterias.indexOf(b.materia);
+    });
 
     return {
         questoes: questoes.slice(0, quantidadeTotal),
         orientacao: orientacoes.join(" ") || "Use o resultado para escolher o que revisar.",
-        aviso: questoes.length < quantidadeTotal
-            ? "A Maltéria encontrou fonte suficiente para " + questoes.length +
-              " questões. As demais não foram inventadas."
-            : ""
+        aviso: ""
     };
 }
 
@@ -9241,7 +9436,7 @@ function atualizarRecomendacaoSimuladao() {
 
     area.innerHTML = `
         <strong>✨ Recomendação da Maltéria</strong>
-        <p>Serão criadas aproximadamente <b>${configuracao.quantidade} questões</b>. Sem histórico suficiente, o nível começa gradual; desafio só é recomendado depois de acertos consistentes.</p>
+        <p>Serão criadas exatamente <b>${configuracao.quantidade} questões</b>. O simulado só será aberto quando todas estiverem prontas. Sem histórico suficiente, o nível começa gradual.</p>
         <ul>${niveis}</ul>
     `;
 }
@@ -9277,18 +9472,36 @@ async function criarSimuladaoGeral() {
     const arquivoEscolhido = arquivosFonteSimuladao.find(function (arquivo) {
         return String(arquivo.id) === String(arquivoId);
     });
+    const arquivosPorMateria = {};
+    materias.forEach(function (materia) {
+        const seletorFolha = document.querySelector('[data-folha-materia="' + materia.id + '"]');
+        const idSelecionado = seletorFolha?.value || "";
+        const arquivoDaMateria = arquivosFonteSimuladao.find(function (arquivo) {
+            return String(arquivo.id) === String(idSelecionado) &&
+                String(arquivo.materiaId) === String(materia.id);
+        });
+        if (arquivoDaMateria) arquivosPorMateria[String(materia.id)] = arquivoDaMateria;
+    });
 
     if (fonte !== "materiais" && !arquivoEscolhido) {
-        status.textContent = "Escolha a " + (fonte === "lista" ? "lista" : "folha") +
-            " que servirá de base para o Simuladão.";
+        status.textContent = "Escolha o material que servirá de base para o Simuladão.";
         return;
     }
 
-    const rotuloFonte = fonte === "lista"
-        ? "Lista específica: " + arquivoEscolhido.nome
-        : fonte === "folha"
-            ? "Folha específica: " + arquivoEscolhido.nome
-            : "Materiais das matérias escolhidas";
+    const fontesIndividuais = Object.values(arquivosPorMateria);
+    const rotuloFonte = fontesIndividuais.length
+        ? fontesIndividuais.map(function (arquivo) {
+            return arquivo.materiaNome + ": " + arquivo.nome;
+        }).join("; ")
+        : fonte === "lista"
+            ? "Lista específica: " + arquivoEscolhido.nome
+            : fonte === "folha"
+                ? "Folha específica: " + arquivoEscolhido.nome
+                : fonte === "slide"
+                    ? "Slides/apresentação: " + arquivoEscolhido.nome
+                    : fonte === "arquivo"
+                        ? "Arquivo específico: " + arquivoEscolhido.nome
+                        : "Materiais das matérias escolhidas";
 
     botao.disabled = true;
     area.classList.add("escondido");
@@ -9298,8 +9511,17 @@ async function criarSimuladaoGeral() {
         arquivosPdfParaIA = [];
         const conteudo = await obterConteudoSimuladao(materias, {
             fonte: fonte,
-            arquivo: arquivoEscolhido || null
+            arquivo: arquivoEscolhido || null,
+            arquivosPorMateria: arquivosPorMateria
         });
+        const distribuicao = calcularDistribuicaoExataSimuladao(
+            materias,
+            configuracao.quantidade,
+            conteudo
+        );
+        status.textContent = "Divisão exata: " + Object.entries(distribuicao.mapaQuantidade)
+            .map(function (item) { return item[0] + " — " + item[1]; })
+            .join(" | ");
 
         let textoBase = null;
         if (usarTextoBase) {
@@ -9333,6 +9555,8 @@ async function criarSimuladaoGeral() {
             dificuldade: dificuldade,
             modalidade: modalidadeIA,
             mapaDificuldade: configuracao.mapa,
+            mapaQuantidade: distribuicao.mapaQuantidade,
+            mapaIdioma: distribuicao.mapaIdioma,
             textoBase: textoBase,
             fontesTextoBase: textoBase?.fontes || []
         }, configuracao.quantidade);
@@ -9372,6 +9596,7 @@ async function obterConteudoSimuladao(materias, inicioOuOpcoes, fimAntigo) {
     const inicio = opcoes.inicio || "";
     const fim = opcoes.fim || "";
     const usarPeriodo = Boolean(inicio && fim);
+    const arquivosPorMateria = opcoes.arquivosPorMateria || {};
     let anexosLidos = 0;
     let texto = usarPeriodo
         ? `SIMULADÃO MALTÉRIA\nPERÍODO: ${inicio} até ${fim}\n`
@@ -9380,21 +9605,32 @@ async function obterConteudoSimuladao(materias, inicioOuOpcoes, fimAntigo) {
     if (fonte !== "materiais") {
         const arquivo = opcoes.arquivo;
         if (!arquivo?.id) {
-            throw new Error("Escolha a lista ou folha que servirá de base para o Simuladão.");
+            throw new Error("Escolha o material que servirá de base para o Simuladão.");
         }
 
         const conteudoArquivo = await lerArquivoDoDrive(arquivo.id);
         texto += "\nFONTE ÚNICA OBRIGATÓRIA: " + arquivo.nome +
-            "\nTIPO DE FONTE: " + (fonte === "lista" ? "lista" : "folha") +
+            "\nTIPO DE FONTE: " + fonte +
             "\nMATÉRIA: " + (arquivo.materiaNome || "matéria escolhida") +
             "\nPUBLICAÇÃO: " + (arquivo.publicacao || "Classroom") +
             "\nCONTEÚDO REAL DO ARQUIVO:\n" + conteudoArquivo +
-            "\n\nREGRA: use este arquivo somente para reconhecer assunto, nível, habilidade e estilo. " +
-            "Não copie perguntas, respostas, exemplos ou frases dele.\n";
+            "\n\nREGRA: estude este material para reconhecer assunto, nível, habilidade e estilo. " +
+            "Crie questões novas e não copie perguntas nem respostas prontas.\n";
         return texto.slice(0, 60000);
     }
 
     for (const materia of materias) {
+        const inicioBlocoMateria = texto.length;
+        const arquivoIndividual = arquivosPorMateria[String(materia.id)];
+        if (arquivoIndividual?.id) {
+            const conteudoArquivoIndividual = await lerArquivoDoDrive(arquivoIndividual.id);
+            texto += `\n=== ${materia.name} ===\n` +
+                "MATERIAL ESPECÍFICO ESCOLHIDO SOMENTE PARA ESTA MATÉRIA: " + arquivoIndividual.nome +
+                "\nPUBLICAÇÃO: " + (arquivoIndividual.publicacao || "Classroom") +
+                "\nCONTEÚDO REAL DO ARQUIVO:\n" + conteudoArquivoIndividual +
+                "\nREGRA: use este material para reconhecer assunto, habilidade, estilo e dificuldade desta matéria; crie questões novas.\n";
+            continue;
+        }
         const respostas = await Promise.all([
             chamarClassroom("courses/" + materia.id + "/courseWork?pageSize=100"),
             chamarClassroom("courses/" + materia.id + "/courseWorkMaterials?pageSize=100")
@@ -9464,6 +9700,13 @@ async function obterConteudoSimuladao(materias, inicioOuOpcoes, fimAntigo) {
             texto += usarPeriodo
                 ? "Nenhum item publicado dentro deste período.\n"
                 : "Nenhum material foi encontrado para esta matéria.\n";
+        }
+
+        const limitePorMateria = Math.max(5000, Math.floor(54000 / Math.max(1, materias.length)));
+        const blocoCompleto = texto.slice(inicioBlocoMateria);
+        if (blocoCompleto.length > limitePorMateria) {
+            texto = texto.slice(0, inicioBlocoMateria) + blocoCompleto.slice(0, limitePorMateria) +
+                "\n[Conteúdo desta matéria reduzido igualmente para preservar espaço para todas as disciplinas.]\n";
         }
     }
 
