@@ -83,6 +83,8 @@ export default async function handler(req, res) {
             quantidade,
             modalidade,
             mapaDificuldade,
+            mapaQuantidade,
+            mapaIdioma,
             fonteSelecionada,
             perguntasAnteriores,
             permitirPesquisaExterna,
@@ -184,6 +186,8 @@ export default async function handler(req, res) {
                 quantidade: Math.min(75, Math.max(5, Number(quantidade) || 15)),
                 modalidade: modalidade === "discursiva" ? "discursiva" : "objetiva",
                 mapaDificuldade: mapaDificuldade || {},
+                mapaQuantidade: mapaQuantidade || {},
+                mapaIdioma: mapaIdioma || {},
                 fonteSelecionada: String(fonteSelecionada || titulo || "materiais escolhidos"),
                 textoBase: textoBase && typeof textoBase === "object" ? textoBase : null,
                 fontesTextoBase: Array.isArray(fontesTextoBase) ? fontesTextoBase.slice(0, 8) : [],
@@ -330,6 +334,8 @@ DIFICULDADE: ${dados.dificuldade}
 QUANTIDADE SOLICITADA: ${dados.quantidade}
 TIPO DE QUESTÃO: ${discursiva ? "DISCURSIVA, PARA O ALUNO ESCREVER" : "OBJETIVA, PARA MARCAR ALTERNATIVA"}
 NÍVEL POR MATÉRIA: ${JSON.stringify(dados.mapaDificuldade)}
+QUANTIDADE EXATA POR MATÉRIA NESTE LOTE: ${JSON.stringify(dados.mapaQuantidade)}
+IDIOMA POR MATÉRIA: ${JSON.stringify(dados.mapaIdioma)}
 
 MATERIAIS:
 ${dados.conteudo}
@@ -340,18 +346,18 @@ ARQUIVOS ANEXADOS DISPONIVEIS: ${nomesArquivos.join(", ") || "nenhum"}
 PERGUNTAS JA CRIADAS, QUE NAO PODEM SER REPETIDAS:
 ${(dados.perguntasAnteriores || []).join("\n") || "nenhuma"}
 
-REGRA DE SEGURANCA PEDAGOGICA (ESTAS REGRAS SUBSTITUEM QUALQUER INSTRUCAO
-ANTERIOR QUE EXIJA COMPLETAR A QUANTIDADE):
-- Crie NO MAXIMO ${dados.quantidade} questoes.
+REGRA DE SEGURANCA PEDAGOGICA:
+- Crie EXATAMENTE ${dados.quantidade} questoes neste lote.
 - ${temTextoBase
         ? "Todas as questões devem ser respondidas pela leitura do TEXTO-BASE ORIGINAL. Use frases, informações, relações e inferências presentes nesse texto."
         : "Use exclusivamente os textos e arquivos recebidos nesta solicitação."}
-- Se a fonte escolhida for uma lista ou folha específica, ela é SOMENTE um modelo
-  de assunto, dificuldade, estilo e habilidade. Não copie perguntas, alternativas,
-  respostas, exemplos ou frases dessa lista/folha.
+- Se a fonte escolhida for uma lista, folha, slide, apresentação, PDF ou outro
+  arquivo específico, use-a como base de assunto, dificuldade, estilo e habilidade.
+  Crie questões novas: não copie perguntas, alternativas nem respostas prontas.
 - Nao use conhecimento geral, curriculo esperado para a serie nem assuntos
   apenas relacionados ao tema.
-- Se as fontes sustentarem menos questoes, produza menos e explique em "aviso".
+- Para completar a quantidade sem inventar conteúdo, crie perguntas novas sobre diferentes trechos,
+  habilidades, aplicações e interpretações comprovadas pelas mesmas fontes.
 - Antes de escrever cada questao, localize a informacao que a sustenta.
 - Preencha "fonte" com ${temTextoBase ? '"Texto-base: ' + String(dados.textoBase.titulo || "Texto-base") + '"' : "o nome real da publicação ou arquivo"}.
 - Preencha "evidencia" com um trecho curto copiado fielmente ${temTextoBase ? "do texto-base" : "da fonte"}.
@@ -361,8 +367,13 @@ ANTERIOR QUE EXIJA COMPLETAR A QUANTIDADE):
   conceitos ou qualquer assunto que nao apareca claramente nas fontes.
 
 REGRAS:
-- Tente criar até ${dados.quantidade} questões, somente quando houver fonte suficiente para cada uma.
+- Entregue exatamente ${dados.quantidade} questões, cada uma sustentada por uma fonte e uma evidência reais.
 - Distribua as questões da forma mais equilibrada possível entre todas as matérias selecionadas.
+- Obedeça EXATAMENTE à QUANTIDADE EXATA POR MATÉRIA NESTE LOTE. Não omita matéria,
+  não transfira a cota de uma matéria para outra e não ultrapasse nenhuma cota.
+- Para matéria marcada como "ingles", escreva pergunta, alternativas, resposta-modelo
+  e explicação em inglês. Geography, English e Inglês devem ser entendidas como matérias
+  em inglês. Se o próprio material estiver predominantemente em inglês, responda em inglês.
 - Obedeça ao nível individual informado em NÍVEL POR MATÉRIA.
 - Quando o nível individual for "reforco", revise fundamentos e erros recorrentes.
 - Quando for "gradual", comece com compreensão e avance até aplicação.
