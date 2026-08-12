@@ -228,8 +228,22 @@ export default async function handler(req, res) {
                 ? erro.message
                 : "Não foi possível concluir a solicitação.";
 
-        return res.status(500).json({
-            erro: mensagem
+        const status = Number(erro?.statusHttp) || 500;
+        const tentarNovamenteEm = Number(
+            erro?.tentarNovamenteEm
+        ) || 0;
+
+        if (tentarNovamenteEm > 0) {
+            res.setHeader(
+                "Retry-After",
+                String(tentarNovamenteEm)
+            );
+        }
+
+        return res.status(status).json({
+            erro: mensagem,
+            codigo: erro?.codigo || "ERRO_IA",
+            tentarNovamenteEm
         });
     }
 }
@@ -1551,16 +1565,22 @@ async function chamarGemini(
 ) {
     const modelos = [
         {
-            nome: "gemini-3.5-flash",
+            nome: "gemini-3.5-flash-lite",
             tentativas: 2
         },
         {
             nome: "gemini-3.1-flash-lite",
+            tentativas: 2
+        },
+        {
+            nome: "gemini-2.5-flash-lite",
             tentativas: 1
         }
     ];
 
     let ultimoErro = null;
+    let limiteAtingido = false;
+    let esperaSugerida = 60;
 
     for (const modelo of modelos) {
         for (
@@ -1598,8 +1618,6 @@ async function chamarGemini(
                         ],
 
                         generationConfig: {
-                            temperature: 0.2,
-
                             maxOutputTokens: 16384,
 
                             responseMimeType:
@@ -1624,6 +1642,17 @@ async function chamarGemini(
                 dadosGemini.error?.message ||
                 "O Gemini recusou a solicitação.";
 
+            const esperaDaResposta =
+                obterEsperaSugerida(
+                    respostaGemini,
+                    dadosGemini
+                );
+
+            if (respostaGemini.status === 429) {
+                limiteAtingido = true;
+                esperaSugerida = esperaDaResposta;
+            }
+
             ultimoErro = new Error(mensagem);
 
             console.error(
@@ -1642,16 +1671,64 @@ async function chamarGemini(
             }
 
             if (tentativa + 1 < modelo.tentativas) {
-                await esperar(900 * (tentativa + 1));
+                await esperar(
+                    Math.min(
+                        2500,
+                        Math.max(
+                            700,
+                            esperaDaResposta * 1000
+                        )
+                    )
+                );
             }
         }
     }
 
-    throw new Error(
-        "A inteligência está muito ocupada agora. " +
-        "A Maltéria tentou dois modelos automaticamente. " +
-        "Aguarde um minuto e tente novamente."
+    const erroFinal = new Error(
+        limiteAtingido
+            ? "O limite temporário da inteligência foi atingido. " +
+                "A Maltéria tentou os dois modelos disponíveis. " +
+                "Tente novamente em " + esperaSugerida + " segundos."
+            : "A inteligência está temporariamente indisponível. " +
+                "A Maltéria tentou os dois modelos disponíveis. " +
+                "Tente novamente em alguns instantes."
     );
+
+    erroFinal.statusHttp = limiteAtingido ? 429 : 503;
+    erroFinal.codigo = limiteAtingido
+        ? "LIMITE_TEMPORARIO_IA"
+        : "IA_INDISPONIVEL";
+    erroFinal.tentarNovamenteEm = limiteAtingido
+        ? esperaSugerida
+        : 15;
+
+    throw erroFinal;
+}
+
+function obterEsperaSugerida(resposta, dados) {
+    const cabecalho = Number(
+        resposta.headers.get("retry-after")
+    );
+
+    if (Number.isFinite(cabecalho) && cabecalho > 0) {
+        return Math.ceil(cabecalho);
+    }
+
+    const detalhes = Array.isArray(dados?.error?.details)
+        ? dados.error.details
+        : [];
+
+    const informacaoDeEspera = detalhes.find(function (detalhe) {
+        return typeof detalhe?.retryDelay === "string";
+    });
+
+    const segundos = Number.parseFloat(
+        informacaoDeEspera?.retryDelay || ""
+    );
+
+    return Number.isFinite(segundos) && segundos > 0
+        ? Math.ceil(segundos)
+        : 60;
 }
 
 function interpretarRespostaGemini(dadosGemini) {
