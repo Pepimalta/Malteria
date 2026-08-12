@@ -5237,8 +5237,8 @@ body {
 
 #lista-materias-simuladao {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(2, minmax(300px, 1fr));
+    gap: 16px;
 }
 
 #lista-materias-simuladao label {
@@ -5253,19 +5253,39 @@ body {
 
 .materia-configuracao-simuladao {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(135px, 170px);
-    align-items: center;
-    gap: 12px;
-    min-height: 82px;
+    grid-template-columns: minmax(170px, 0.8fr) minmax(220px, 1.2fr);
+    align-items: start;
+    gap: 18px;
+    min-height: 170px;
     border: 1px solid #ded6ff;
     border-radius: 16px;
-    padding: 12px 14px;
+    padding: 20px;
     background: linear-gradient(145deg, #fff, #f6f3ff);
 }
 
 .materia-configuracao-simuladao select {
     width: 100%;
     min-width: 0;
+}
+
+.materia-configuracao-simuladao .selecao-materia-simuladao {
+    align-self: center;
+    font-weight: 700;
+    line-height: 1.35;
+}
+
+.controles-materia-simuladao {
+    display: grid;
+    gap: 12px;
+}
+
+.controles-materia-simuladao label {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    color: var(--texto-claro);
+    font-size: 0.82rem;
+    font-weight: 600;
 }
 
 .acoes-materias-simuladao {
@@ -6366,4 +6386,58 @@ body {
     border: 2px dashed #cbb8ff;
     border-radius: 13px;
     background: #fff;
+}
+
+.orientacao-estudo {
+    margin-top: 22px;
+    padding: 22px;
+    border: 1px solid #cfc2ff;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #fff9ff, #eef9ff);
+    box-shadow: 0 16px 38px rgba(88, 61, 190, 0.12);
+}
+
+.orientacao-estudo-titulo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.orientacao-estudo-titulo > span { font-size: 34px; }
+.orientacao-estudo-titulo small { color: #6a3dff; font-weight: 900; letter-spacing: .08em; }
+.orientacao-estudo-titulo h3 { margin: 3px 0 0; }
+.orientacao-resumo { line-height: 1.65; }
+.materiais-recomendados,
+.plano-estudo-curto { display: grid; gap: 10px; margin-top: 18px; }
+.materiais-recomendados h4,
+.plano-estudo-curto h4 { margin: 0 0 2px; }
+.materiais-recomendados article,
+.plano-estudo-curto article {
+    display: flex;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.86);
+}
+.materiais-recomendados p,
+.plano-estudo-curto p { margin: 4px 0; line-height: 1.5; }
+.materiais-recomendados small,
+.plano-estudo-curto small { color: #706f83; }
+.numero-etapa {
+    display: grid;
+    place-items: center;
+    flex: 0 0 30px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: #fff;
+    background: linear-gradient(135deg, #512bd4, #8b4dff);
+    font-weight: 900;
+}
+.proximo-passo-estudo {
+    margin: 18px 0 0;
+    padding: 14px 16px;
+    border-left: 4px solid #23b7d5;
+    border-radius: 10px;
+    background: #eafcff;
 }
