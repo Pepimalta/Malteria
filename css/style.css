@@ -5160,6 +5160,16 @@ body {
     color: #625b78;
 }
 
+.explicacao-texto-base-simuladao {
+    margin: 0;
+    padding: 13px 16px;
+    border-left: 4px solid #7b4dff;
+    border-radius: 12px;
+    background: #f7f3ff;
+    color: #5d5671;
+    line-height: 1.5;
+}
+
 .configurador-simulado-materia {
     display: grid;
     gap: 18px;
@@ -5417,6 +5427,44 @@ body {
 .folha-impressa header {
     border-bottom: 2px solid #292536;
     padding-bottom: 18px;
+}
+
+.texto-base-folha {
+    margin: 26px 0 34px;
+    padding: 22px;
+    border: 1px solid #cfcbdc;
+    border-radius: 10px;
+    background: #fafafa;
+}
+
+.texto-base-folha > span {
+    font-size: 0.72rem;
+    font-weight: 900;
+    letter-spacing: 1.2px;
+}
+
+.texto-base-folha h3 {
+    margin: 8px 0 14px;
+}
+
+.texto-base-folha p,
+.texto-base-simuladao p {
+    line-height: 1.7;
+    text-align: justify;
+}
+
+.texto-base-simuladao {
+    margin-bottom: 22px;
+    border: 1px solid #d9ceff;
+    border-radius: 18px;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #fff, #f8f5ff);
+}
+
+.texto-base-simuladao summary {
+    color: var(--roxo-escuro);
+    font-weight: 900;
+    cursor: pointer;
 }
 
 .marca-folha {
