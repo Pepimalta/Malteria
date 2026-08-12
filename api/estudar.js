@@ -85,7 +85,9 @@ export default async function handler(req, res) {
             mapaDificuldade,
             fonteSelecionada,
             perguntasAnteriores,
-            permitirPesquisaExterna
+            permitirPesquisaExterna,
+            textoBase,
+            fontesTextoBase
         } = req.body || {};
 
         if (tipo === "nivel_evolucao") {
@@ -164,6 +166,15 @@ export default async function handler(req, res) {
             });
         }
 
+        if (tipo === "preparar_texto_base_simuladao") {
+            return await prepararTextoBaseSimuladao(res, {
+                materia,
+                titulo,
+                conteudo: conteudoLimitado,
+                fonteSelecionada: String(fonteSelecionada || titulo || "materiais escolhidos")
+            });
+        }
+
         if (tipo === "simuladao" || tipo === "simulado") {
             return await criarSimuladao(res, {
                 materia,
@@ -174,6 +185,8 @@ export default async function handler(req, res) {
                 modalidade: modalidade === "discursiva" ? "discursiva" : "objetiva",
                 mapaDificuldade: mapaDificuldade || {},
                 fonteSelecionada: String(fonteSelecionada || titulo || "materiais escolhidos"),
+                textoBase: textoBase && typeof textoBase === "object" ? textoBase : null,
+                fontesTextoBase: Array.isArray(fontesTextoBase) ? fontesTextoBase.slice(0, 8) : [],
                 arquivos,
                 perguntasAnteriores: Array.isArray(perguntasAnteriores)
                     ? perguntasAnteriores.slice(-40)
@@ -288,9 +301,14 @@ async function criarSimuladao(res, dados) {
     const nomesArquivos = (Array.isArray(dados.arquivos) ? dados.arquivos : [])
         .map(function (arquivo) { return arquivo && arquivo.nome; })
         .filter(Boolean);
+    const temTextoBase = Boolean(dados.textoBase && dados.textoBase.texto);
+    const textoBaseCompleto = temTextoBase
+        ? "TÍTULO DO TEXTO-BASE: " + String(dados.textoBase.titulo || "Texto-base") +
+          "\nTEXTO-BASE ORIGINAL:\n" + String(dados.textoBase.texto || "")
+        : "Nenhum texto-base foi solicitado.";
     const instrucao = `
 Você é a professora virtual do aplicativo Maltéria.
-Crie um simulado interdisciplinar usando SOMENTE os materiais fornecidos.
+Crie um simulado interdisciplinar pedagogicamente fiel ao conteúdo estudado.
 
 MATÉRIAS: ${dados.materia}
 FONTE ESCOLHIDA: ${dados.fonteSelecionada || dados.titulo || "materiais escolhidos"}
@@ -302,6 +320,8 @@ NÍVEL POR MATÉRIA: ${JSON.stringify(dados.mapaDificuldade)}
 MATERIAIS:
 ${dados.conteudo}
 
+${textoBaseCompleto}
+
 ARQUIVOS ANEXADOS DISPONIVEIS: ${nomesArquivos.join(", ") || "nenhum"}
 PERGUNTAS JA CRIADAS, QUE NAO PODEM SER REPETIDAS:
 ${(dados.perguntasAnteriores || []).join("\n") || "nenhuma"}
@@ -309,15 +329,18 @@ ${(dados.perguntasAnteriores || []).join("\n") || "nenhuma"}
 REGRA DE SEGURANCA PEDAGOGICA (ESTAS REGRAS SUBSTITUEM QUALQUER INSTRUCAO
 ANTERIOR QUE EXIJA COMPLETAR A QUANTIDADE):
 - Crie NO MAXIMO ${dados.quantidade} questoes.
-- Use exclusivamente os textos e arquivos recebidos nesta solicitacao.
-- Se a fonte escolhida for uma lista ou folha específica, todas as questões
-  devem estar comprovadas nesse único arquivo. Ignore outros materiais.
+- ${temTextoBase
+        ? "Todas as questões devem ser respondidas pela leitura do TEXTO-BASE ORIGINAL. Use frases, informações, relações e inferências presentes nesse texto."
+        : "Use exclusivamente os textos e arquivos recebidos nesta solicitação."}
+- Se a fonte escolhida for uma lista ou folha específica, ela é SOMENTE um modelo
+  de assunto, dificuldade, estilo e habilidade. Não copie perguntas, alternativas,
+  respostas, exemplos ou frases dessa lista/folha.
 - Nao use conhecimento geral, curriculo esperado para a serie nem assuntos
   apenas relacionados ao tema.
 - Se as fontes sustentarem menos questoes, produza menos e explique em "aviso".
 - Antes de escrever cada questao, localize a informacao que a sustenta.
-- Preencha "fonte" com o nome real da publicacao ou arquivo.
-- Preencha "evidencia" com um trecho curto copiado fielmente da fonte.
+- Preencha "fonte" com ${temTextoBase ? '"Texto-base: ' + String(dados.textoBase.titulo || "Texto-base") + '"' : "o nome real da publicação ou arquivo"}.
+- Preencha "evidencia" com um trecho curto copiado fielmente ${temTextoBase ? "do texto-base" : "da fonte"}.
 - Apenas o nome da materia nao serve como evidencia.
 - Se nao houver fonte e evidencia, descarte a questao.
 - Nao cobre sujeito, predicado, figuras de linguagem, formulas, datas,
@@ -376,7 +399,9 @@ REGRAS:
         prepararPartesDeArquivos(dados.arquivos)
     );
 
-    const fonteTextual = normalizarParaConferencia(dados.conteudo);
+    const fonteTextual = normalizarParaConferencia(
+        temTextoBase ? dados.textoBase.texto : dados.conteudo
+    );
     const nomesNormalizados = nomesArquivos.map(normalizarParaConferencia);
     const recebidas = Array.isArray(resultado.questoes) ? resultado.questoes : [];
 
@@ -398,6 +423,44 @@ REGRAS:
     }
 
     return res.status(200).json(resultado);
+}
+
+async function prepararTextoBaseSimuladao(res, dados) {
+    const referencia = String(dados.conteudo || "").slice(0, 9000);
+    const pergunta = `
+Crie um texto-base ORIGINAL, em português do Brasil, apropriado para um simulado escolar.
+Matéria ou matérias: ${dados.materia}.
+Referência escolhida: ${dados.fonteSelecionada}.
+
+Use a referência escolar abaixo apenas para identificar assunto, habilidade, vocabulário,
+idade aproximada e nível de dificuldade. Não copie perguntas, respostas, exemplos nem
+frases da folha ou lista. Pesquise informações públicas confiáveis no Google para dar
+base factual ao novo texto. Produza entre 5 e 8 parágrafos, com conteúdo suficiente para
+questões de compreensão, interpretação, aplicação e inferência. Não inclua perguntas no
+texto. Comece com um título curto em uma linha e depois o texto.
+
+REFERÊNCIA ESCOLAR:
+${referencia}
+`;
+    const pesquisa = await pesquisarComGoogle(pergunta, dados.materia);
+    const linhas = String(pesquisa.texto || "").split(/\r?\n/).map(function (linha) {
+        return linha.trim();
+    }).filter(Boolean);
+    const titulo = (linhas.shift() || "Texto-base do Simuladão")
+        .replace(/^#+\s*/, "")
+        .replace(/^t[ií]tulo\s*:\s*/i, "")
+        .slice(0, 140);
+    const texto = linhas.join("\n\n").trim();
+
+    if (texto.length < 350) {
+        throw new Error("Não foi possível preparar um texto-base completo. Tente novamente.");
+    }
+
+    return res.status(200).json({
+        titulo: titulo,
+        texto: texto,
+        fontes: pesquisa.fontes || []
+    });
 }
 
 function normalizarParaConferencia(valor) {
