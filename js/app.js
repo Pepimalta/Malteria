@@ -3327,9 +3327,31 @@ async function criarSimuladoDaMateria() {
     }
 }
 
+async function mostrarContagemParaNovaTentativa(
+    elemento,
+    segundos
+) {
+    for (let restante = segundos; restante > 0; restante--) {
+        if (elemento) {
+            elemento.textContent =
+                "A inteligência está ocupada. Nova tentativa automática em " +
+                restante +
+                (restante === 1 ? " segundo..." : " segundos...");
+        }
+
+        await new Promise(function (resolver) {
+            window.setTimeout(resolver, 1000);
+        });
+    }
+}
+
 function traduzirErroDaInteligencia(mensagemOriginal) {
     const mensagem =
         String(mensagemOriginal || "");
+
+    if (/tente novamente em \d+ segundos/i.test(mensagem)) {
+        return mensagem;
+    }
 
     if (
         /high demand|spikes in demand|try again later|overloaded|unavailable/i
@@ -3347,8 +3369,9 @@ function traduzirErroDaInteligencia(mensagemOriginal) {
             .test(mensagem)
     ) {
         return (
-            "O limite de solicitações da inteligência foi atingido. " +
-            "Espere um minuto e tente novamente."
+            "O limite temporário da inteligência foi atingido. " +
+            "A Maltéria já tentou o modelo reserva. " +
+            "Aguarde o prazo indicado e tente novamente."
         );
     }
 
@@ -3593,9 +3616,7 @@ async function pesquisarMateriais() {
                 ? "A inteligência da MALTÉRIA está analisando os resultados..."
                 : "Não achei esse assunto nos materiais. Pesquisando uma explicação externa...";
 
-        const respostaServidor = await fetch(
-            ENDERECO_IA,
-            {
+        const opcoesDaSolicitacao = {
                 method: "POST",
 
                 headers: {
@@ -3623,11 +3644,51 @@ async function pesquisarMateriais() {
                         conteudo.slice(0, 60000),
                     arquivos: arquivosPdfParaIA
                 })
-            }
+            };
+
+        let respostaServidor = await fetch(
+            ENDERECO_IA,
+            opcoesDaSolicitacao
         );
 
-        const dados =
-            await respostaServidor.json();
+        if (respostaServidor.status === 429) {
+            const dadosDoLimite = await respostaServidor
+                .clone()
+                .json()
+                .catch(function () {
+                    return {};
+                });
+
+            const segundos = Math.min(
+                60,
+                Math.max(
+                    5,
+                    Number(dadosDoLimite.tentarNovamenteEm) || 60
+                )
+            );
+
+            await mostrarContagemParaNovaTentativa(
+                status,
+                segundos
+            );
+
+            status.textContent =
+                "Tentando novamente automaticamente...";
+
+            respostaServidor = await fetch(
+                ENDERECO_IA,
+                opcoesDaSolicitacao
+            );
+        }
+
+        const tipoResposta = respostaServidor.headers.get("content-type") || "";
+        if (!tipoResposta.includes("application/json")) {
+            throw new Error(
+                "A API da Maltéria devolveu uma página inválida. Aguarde a implantação da Vercel e tente novamente."
+            );
+        }
+
+        const dados = await respostaServidor.json();
 
         if (!respostaServidor.ok) {
             throw new Error(
@@ -5137,6 +5198,11 @@ function desenharResultadoPesquisa(
     const concluidos =
         carregarItensConcluidos();
 
+    const orientacao = renderizarOrientacaoDeEstudo(
+        dados.orientacaoEstudo,
+        fontes
+    );
+
     const avisos = urgentes.length
         ? `
             <details class="avisos-urgentes detalhes-finais">
@@ -5241,6 +5307,8 @@ function desenharResultadoPesquisa(
                     : formatarTexto(dados.resposta)}
         </article>
 
+        ${orientacao}
+
         <details class="detalhes-finais">
             <summary>
                 Ler mais: ver ${fontes.length}
@@ -5284,6 +5352,88 @@ function desenharResultadoPesquisa(
         behavior: "smooth",
         block: "start"
     });
+}
+
+function renderizarOrientacaoDeEstudo(orientacao, fontes) {
+    if (!orientacao || typeof orientacao !== "object") {
+        return "";
+    }
+
+    const materiais = Array.isArray(orientacao.materiais)
+        ? orientacao.materiais
+        : [];
+    const plano = Array.isArray(orientacao.plano)
+        ? orientacao.plano
+        : [];
+    const nomesDisponiveis = (fontes || []).map(function (fonte) {
+        return normalizarPesquisa(fonte.titulo || "");
+    });
+    const materiaisValidos = materiais.filter(function (material) {
+        const nome = normalizarPesquisa(material.nome || "");
+        return nome && nomesDisponiveis.some(function (fonte) {
+            return fonte.includes(nome) || nome.includes(fonte);
+        });
+    });
+
+    if (!orientacao.resumo && materiaisValidos.length === 0 && plano.length === 0) {
+        return "";
+    }
+
+    return `
+        <section class="orientacao-estudo">
+            <div class="orientacao-estudo-titulo">
+                <span aria-hidden="true">🧭</span>
+                <div>
+                    <small>ORIENTAÇÃO DE ESTUDO</small>
+                    <h3>Como estudar este assunto</h3>
+                </div>
+            </div>
+
+            ${orientacao.resumo
+                ? `<p class="orientacao-resumo">${protegerTexto(orientacao.resumo)}</p>`
+                : ""}
+
+            ${materiaisValidos.length
+                ? `<div class="materiais-recomendados">
+                    <h4>Use estes materiais</h4>
+                    ${materiaisValidos.map(function (material, indice) {
+                        return `
+                            <article>
+                                <span class="numero-etapa">${indice + 1}</span>
+                                <div>
+                                    <strong>${protegerTexto(material.nome)}</strong>
+                                    <p>${protegerTexto(material.comoUsar)}</p>
+                                    <small>${protegerTexto(material.motivo)}</small>
+                                </div>
+                            </article>
+                        `;
+                    }).join("")}
+                </div>`
+                : ""}
+
+            ${plano.length
+                ? `<div class="plano-estudo-curto">
+                    <h4>Plano rápido</h4>
+                    ${plano.map(function (item, indice) {
+                        return `
+                            <article>
+                                <span class="numero-etapa">${indice + 1}</span>
+                                <div>
+                                    <strong>${protegerTexto(item.etapa)}</strong>
+                                    <small>${protegerTexto(item.duracao)}</small>
+                                    <p>${protegerTexto(item.acao)}</p>
+                                </div>
+                            </article>
+                        `;
+                    }).join("")}
+                </div>`
+                : ""}
+
+            ${orientacao.proximoPasso
+                ? `<p class="proximo-passo-estudo"><strong>Próximo passo:</strong> ${protegerTexto(orientacao.proximoPasso)}</p>`
+                : ""}
+        </section>
+    `;
 }
 
 function renderizarSlidesDaPesquisa(slides) {
@@ -9016,6 +9166,13 @@ async function gerarQuestoesEmLotes(payload, quantidadeTotal) {
                 })
             })
         });
+        const tipoRespostaQuestoesSimulado = resposta.headers.get("content-type") || "";
+        if (!tipoRespostaQuestoesSimulado.includes("application/json")) {
+            throw new Error(
+                "A API da Maltéria devolveu uma página inválida. Aguarde a implantação da Vercel e tente novamente."
+            );
+        }
+
         const dados = await resposta.json();
 
         if (!resposta.ok) {
