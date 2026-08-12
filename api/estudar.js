@@ -938,9 +938,41 @@ async function responderPesquisaExterna(res, dados) {
                     }
                 },
                 required: ["titulo", "colunas", "linhas"]
+            },
+            orientacaoEstudo: {
+                type: "OBJECT",
+                properties: {
+                    resumo: { type: "STRING" },
+                    materiais: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                nome: { type: "STRING" },
+                                comoUsar: { type: "STRING" },
+                                motivo: { type: "STRING" }
+                            },
+                            required: ["nome", "comoUsar", "motivo"]
+                        }
+                    },
+                    plano: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                etapa: { type: "STRING" },
+                                duracao: { type: "STRING" },
+                                acao: { type: "STRING" }
+                            },
+                            required: ["etapa", "duracao", "acao"]
+                        }
+                    },
+                    proximoPasso: { type: "STRING" }
+                },
+                required: ["resumo", "materiais", "plano", "proximoPasso"]
             }
         },
-        required: ["resposta", "slides", "tabela"]
+        required: ["resposta", "slides", "tabela", "orientacaoEstudo"]
     };
     const instrucao = `
 Você é a assistente educacional da Maltéria.
@@ -962,6 +994,10 @@ inclua definição, método, exemplo resolvido e uma pequena verificação. Não
 conteúdo nem links. No fim da resposta, crie a seção "Fontes consultadas" com os
 links fornecidos acima. Informe de forma breve que esta resposta usou pesquisa
 externa porque não havia base suficiente nos materiais do Classroom.
+Crie também orientacaoEstudo. Recomende uma ordem prática para estudar o assunto,
+explique como usar cada fonte realmente encontrada e monte um plano curto. Não
+diga que existe livro, caderno, slide ou folha escolar quando esses materiais
+não foram fornecidos. Diferencie fonte consultada de sugestão de atividade.
 Responda somente em JSON válido.
 `;
     const resultado = await chamarGemini(instrucao, schema);
@@ -1023,6 +1059,10 @@ REGRAS OBRIGATÓRIAS:
 - Use somente informações presentes nos materiais fornecidos.
 - Não invente aulas, datas, provas, deveres ou conteúdos.
 - Se a resposta não estiver nos materiais, diga claramente.
+- Defina conteudoSuficiente como true somente quando os materiais realmente
+  permitirem responder à pergunta. Ter arquivos da mesma matéria não basta.
+- Se o assunto solicitado não estiver explicado nos materiais, defina
+  conteudoSuficiente como false e descreva em motivoAusencia o que faltou.
 - Explique de maneira simples e adequada para um aluno.
 - Relacione a resposta com a matéria e o período escolhido.
 - Quando encontrar provas, trabalhos, exercícios ou deveres,
@@ -1050,6 +1090,13 @@ REGRAS OBRIGATÓRIAS:
   apresente-os com precisão.
 - Não diga que pesquisou na internet.
 - Não diga que acessou materiais que não foram fornecidos.
+- Crie também orientacaoEstudo com uma recomendação prática e personalizada.
+- Em materiais, inclua somente arquivos ou fontes que realmente aparecem em
+  MATERIAIS ENCONTRADOS. Para cada item, explique como usar e por que ele ajuda.
+- Não invente livro, caderno, slide, folha ou lista. Se algum deles não estiver
+  disponível, não o apresente como material encontrado.
+- Monte um plano curto em ordem: compreender, praticar e revisar. Use durações
+  realistas e termine indicando o próximo passo mais útil para o aluno.
 
 Responda somente em JSON válido.
 `;
@@ -1058,6 +1105,14 @@ Responda somente em JSON válido.
         type: "OBJECT",
 
         properties: {
+            conteudoSuficiente: {
+                type: "BOOLEAN"
+            },
+
+            motivoAusencia: {
+                type: "STRING"
+            },
+
             resposta: {
                 type: "STRING"
             },
@@ -1100,13 +1155,48 @@ Responda somente em JSON válido.
                     }
                 },
                 required: ["titulo", "colunas", "linhas"]
+            },
+            orientacaoEstudo: {
+                type: "OBJECT",
+                properties: {
+                    resumo: { type: "STRING" },
+                    materiais: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                nome: { type: "STRING" },
+                                comoUsar: { type: "STRING" },
+                                motivo: { type: "STRING" }
+                            },
+                            required: ["nome", "comoUsar", "motivo"]
+                        }
+                    },
+                    plano: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                etapa: { type: "STRING" },
+                                duracao: { type: "STRING" },
+                                acao: { type: "STRING" }
+                            },
+                            required: ["etapa", "duracao", "acao"]
+                        }
+                    },
+                    proximoPasso: { type: "STRING" }
+                },
+                required: ["resumo", "materiais", "plano", "proximoPasso"]
             }
         },
 
         required: [
+            "conteudoSuficiente",
+            "motivoAusencia",
             "resposta",
             "slides",
-            "tabela"
+            "tabela",
+            "orientacaoEstudo"
         ]
     };
 
@@ -1121,6 +1211,10 @@ Responda somente em JSON válido.
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
     const respostaSemBasePorFrase = [
+        "conteudo nao encontrado",
+        "indisponibilidade de conteudo",
+        "nao esta presente nos materiais",
+        "nao esta nos materiais disponibilizados",
         "nao foi possivel encontrar",
         "nao encontrei nos materiais",
         "nao consta nos materiais",
@@ -1138,7 +1232,11 @@ Responda somente em JSON válido.
     const respostaSemBasePorEstrutura =
         /materia(?:l|is)[\s\S]{0,120}(?:nao contem|nao inclui|incompleto)/.test(respostaNormalizada) ||
         /conteudo(?:s)?[\s\S]{0,120}nao (?:foi|foram) incluido/.test(respostaNormalizada);
-    const respostaSemBase = respostaSemBasePorFrase || respostaSemBasePorEstrutura;
+    const respostaSemBaseDeclarada = resultado.conteudoSuficiente === false;
+    const respostaSemBase =
+        respostaSemBaseDeclarada ||
+        respostaSemBasePorFrase ||
+        respostaSemBasePorEstrutura;
 
     if (dados.permitirPesquisaExterna && respostaSemBase) {
         return responderPesquisaExterna(res, dados);
