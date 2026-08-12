@@ -1285,14 +1285,20 @@
                     </div>
 
                     <div class="grade-configuracao-simuladao">
+                        <label>Texto-base
+                            <select id="texto-base-simuladao">
+                                <option value="sim" selected>Sim — ler um texto e responder</option>
+                                <option value="nao">Não — questões independentes</option>
+                            </select>
+                        </label>
                         <label>Usar como base
                             <select id="fonte-simuladao">
                                 <option value="materiais" selected>Materiais das matérias escolhidas</option>
-                                <option value="lista">Uma lista específica</option>
-                                <option value="folha">Uma folha específica</option>
+                                <option value="lista">Modelo parecido com uma lista</option>
+                                <option value="folha">Modelo parecido com uma folha</option>
                             </select>
                         </label>
-                        <label id="campo-arquivo-simuladao" class="escondido">Escolha a lista ou folha
+                        <label id="campo-arquivo-simuladao" class="escondido">Escolha o modelo de lista ou folha
                             <select id="arquivo-simuladao" disabled>
                                 <option value="">Marque as matérias primeiro</option>
                             </select>
@@ -1316,6 +1322,11 @@
                             <input id="quantidade-simuladao" type="number" min="5" max="75" value="20" inputmode="numeric">
                         </label>
                     </div>
+
+                    <p class="explicacao-texto-base-simuladao">
+                        A folha escolhida serve somente para a Maltéria entender o assunto, o nível e o estilo.
+                        Ela não copia as perguntas: cria um texto-base novo e questões novas sobre ele.
+                    </p>
 
                     <p id="status-fonte-simuladao" class="status-pesquisa" aria-live="polite"></p>
 
