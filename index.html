@@ -1296,9 +1296,11 @@
                                 <option value="materiais" selected>Materiais das matérias escolhidas</option>
                                 <option value="lista">Modelo parecido com uma lista</option>
                                 <option value="folha">Modelo parecido com uma folha</option>
+                                <option value="slide">Modelo baseado em slides/apresentação</option>
+                                <option value="arquivo">Outro material específico do Classroom</option>
                             </select>
                         </label>
-                        <label id="campo-arquivo-simuladao" class="escondido">Escolha o modelo de lista ou folha
+                        <label id="campo-arquivo-simuladao" class="escondido">Escolha o material específico
                             <select id="arquivo-simuladao" disabled>
                                 <option value="">Marque as matérias primeiro</option>
                             </select>
@@ -1324,17 +1326,17 @@
                     </div>
 
                     <p class="explicacao-texto-base-simuladao">
-                        A folha escolhida serve somente para a Maltéria entender o assunto, o nível e o estilo.
-                        Ela não copia as perguntas: cria um texto-base novo e questões novas sobre ele.
+                        O material escolhido serve para a Maltéria entender o assunto, o nível e o estilo.
+                        Ela não copia perguntas prontas: cria um texto-base e questões novas sobre o conteúdo.
                     </p>
 
                     <p id="status-fonte-simuladao" class="status-pesquisa" aria-live="polite"></p>
 
                     <fieldset class="materias-simuladao">
-                        <legend>Matérias participantes e nível individual</legend>
+                        <legend>Matérias, nível e material específico de cada disciplina</legend>
                         <div class="acoes-materias-simuladao">
                             <button id="selecionar-todas-materias" class="botao-secundario pequeno" type="button">Selecionar todas</button>
-                            <small>O nível individual pode seguir a recomendação ou substituir a estratégia geral.</small>
+                            <small>Em cada matéria, escolha o nível e, se quiser, uma folha, lista, slide, PDF ou outro arquivo. A escolha vale somente para aquela matéria.</small>
                         </div>
                         <div id="lista-materias-simuladao"></div>
                     </fieldset>
