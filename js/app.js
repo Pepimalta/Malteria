@@ -9114,6 +9114,7 @@ async function criarSimuladaoGeral() {
     const dificuldade = configuracao.estrategia;
     const modalidade = document.querySelector("#modalidade-simuladao").value;
     const modalidadeIA = modalidade === "manual" ? "discursiva" : modalidade;
+    const usarTextoBase = document.querySelector("#texto-base-simuladao")?.value !== "nao";
     const fonte = document.querySelector("#fonte-simuladao").value;
     const arquivoId = document.querySelector("#arquivo-simuladao").value;
     const arquivoEscolhido = arquivosFonteSimuladao.find(function (arquivo) {
@@ -9143,7 +9144,28 @@ async function criarSimuladaoGeral() {
             arquivo: arquivoEscolhido || null
         });
 
-        status.textContent = "Criando " + configuracao.quantidade + " questões com níveis ajustados por matéria...";
+        let textoBase = null;
+        if (usarTextoBase) {
+            status.textContent = "Pesquisando e escrevendo um texto-base original...";
+            const respostaTextoBase = await fetch(ENDERECO_IA, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    tipo: "preparar_texto_base_simuladao",
+                    materia: materias.map(function (item) { return item.name; }).join(", "),
+                    titulo: "Texto-base do Simuladão",
+                    fonteSelecionada: rotuloFonte,
+                    conteudo: conteudo
+                })
+            });
+            textoBase = await respostaTextoBase.json();
+            if (!respostaTextoBase.ok) {
+                throw new Error(textoBase.erro || "Não foi possível criar o texto-base.");
+            }
+        }
+
+        status.textContent = "Criando " + configuracao.quantidade + " questões " +
+            (usarTextoBase ? "a partir do texto-base..." : "com níveis ajustados por matéria...");
 
         const dados = await gerarQuestoesEmLotes({
             tipo: "simuladao",
@@ -9153,7 +9175,9 @@ async function criarSimuladaoGeral() {
             conteudo: conteudo,
             dificuldade: dificuldade,
             modalidade: modalidadeIA,
-            mapaDificuldade: configuracao.mapa
+            mapaDificuldade: configuracao.mapa,
+            textoBase: textoBase,
+            fontesTextoBase: textoBase?.fontes || []
         }, configuracao.quantidade);
 
         if (modalidade === "manual") {
@@ -9161,7 +9185,8 @@ async function criarSimuladaoGeral() {
                 area: area,
                 titulo: "Simuladão para fazer à mão",
                 materias: materias.map(function (item) { return item.name; }),
-                fonte: rotuloFonte
+                fonte: rotuloFonte,
+                textoBase: textoBase
             });
         } else {
             desenharSimuladaoInterativo(dados, {
@@ -9169,7 +9194,8 @@ async function criarSimuladaoGeral() {
                 modalidade: modalidade,
                 tipoRegistro: "simuladao",
                 materias: materias.map(function (item) { return item.name; }),
-                fonte: rotuloFonte
+                fonte: rotuloFonte,
+                textoBase: textoBase
             });
         }
         status.textContent = "Simuladão pronto. Faça no seu ritmo.";
@@ -9206,7 +9232,8 @@ async function obterConteudoSimuladao(materias, inicioOuOpcoes, fimAntigo) {
             "\nMATÉRIA: " + (arquivo.materiaNome || "matéria escolhida") +
             "\nPUBLICAÇÃO: " + (arquivo.publicacao || "Classroom") +
             "\nCONTEÚDO REAL DO ARQUIVO:\n" + conteudoArquivo +
-            "\n\nREGRA: nenhuma questão pode usar conteúdo que não esteja comprovado neste arquivo.\n";
+            "\n\nREGRA: use este arquivo somente para reconhecer assunto, nível, habilidade e estilo. " +
+            "Não copie perguntas, respostas, exemplos ou frases dele.\n";
         return texto.slice(0, 60000);
     }
 
@@ -9312,6 +9339,15 @@ function desenharListaSimuladoParaImprimir(dados, configuracao) {
             )}</li>
         `;
     }).join("");
+    const blocoTextoBase = configuracao.textoBase?.texto ? `
+        <article class="texto-base-folha">
+            <span>LEIA O TEXTO PARA RESPONDER ÀS QUESTÕES</span>
+            <h3>${protegerTexto(configuracao.textoBase.titulo || "Texto-base")}</h3>
+            ${String(configuracao.textoBase.texto).split(/\n{2,}/).map(function (paragrafo) {
+                return `<p>${protegerTexto(paragrafo)}</p>`;
+            }).join("")}
+        </article>
+    ` : "";
 
     area.innerHTML = `
         <div class="acoes-lista-impressa">
@@ -9325,7 +9361,7 @@ function desenharListaSimuladoParaImprimir(dados, configuracao) {
                 <p>${protegerTexto(configuracao.materias.join(" • "))}</p>
                 <div class="identificacao-folha"><span>Nome: ____________________________________</span><span>Data: ____/____/________</span></div>
             </header>
-            <main>${enunciados}</main>
+            <main>${blocoTextoBase}${enunciados}</main>
         </section>
         <details class="gabarito-lista"><summary>Ver gabarito depois de terminar</summary><ol>${gabarito}</ol></details>
     `;
@@ -9349,6 +9385,14 @@ function desenharSimuladaoInterativo(dados, configuracao) {
     let atual = 0;
     let pontos = 0;
     const respostasDoSimulado = [];
+    const blocoTextoBase = configuracao.textoBase?.texto ? `
+        <details class="texto-base-simuladao" open>
+            <summary>📖 ${protegerTexto(configuracao.textoBase.titulo || "Ler texto-base")}</summary>
+            <div>${String(configuracao.textoBase.texto).split(/\n{2,}/).map(function (paragrafo) {
+                return `<p>${protegerTexto(paragrafo)}</p>`;
+            }).join("")}</div>
+        </details>
+    ` : "";
 
     function fonteDaQuestao(questao) {
         return `
@@ -9379,6 +9423,7 @@ function desenharSimuladaoInterativo(dados, configuracao) {
             `;
 
         area.innerHTML = `
+            ${blocoTextoBase}
             <div class="cabecalho-questao-simuladao">
                 <span>${protegerTexto(questao.materia || "Simuladão")}</span>
                 <small>Questão ${atual + 1} de ${questoes.length} · ${protegerTexto(questao.nivel || "progressiva")}</small>
