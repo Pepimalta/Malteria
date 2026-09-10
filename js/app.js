@@ -321,7 +321,7 @@ function verificarLembretes() {
     exibirAvisoLembrete(devido);
 }
 
-adicionarEnfeitesVisiveisNasPaginas();
+// Enfeites laterais desativados: identidade visual mais discreta.
 const animacaoMalteria =
     document.querySelector("#animacao-malteria");
 const telaBoasVindas = document.querySelector("#boas-vindas");
@@ -1061,11 +1061,16 @@ document
             return;
         }
 
-        if (senha.length < 6) {
+        if (senha.length < 8) {
             mostrarErroCadastro(
-                "A senha precisa ter pelo menos 6 caracteres."
+                "A senha precisa ter pelo menos 8 caracteres."
             );
 
+            return;
+        }
+
+        if (senha !== document.querySelector("#cadastro-confirmar-senha").value) {
+            mostrarErroCadastro("As duas senhas precisam ser iguais.");
             return;
         }
 
@@ -1122,11 +1127,19 @@ document
 
         if (bancoAtivo) {
             try {
-                const usuarioBanco = await window.MalteriaBanco.cadastrar(
+                const cadastroBanco = await window.MalteriaBanco.cadastrar(
                     usuarioAtual,
                     senha
                 );
-                usuarioAtual.id = usuarioBanco && usuarioBanco.id;
+                usuarioAtual.id = cadastroBanco.usuario && cadastroBanco.usuario.id;
+                usuarioAtual.bancoConectado = true;
+                if (cadastroBanco.precisaConfirmarEmail) {
+                    salvarUsuarioLocal(usuarioAtual);
+                    usuarioAtual = null;
+                    abrirLoginLimpo();
+                    mostrarErroLogin("Confira seu e-mail para confirmar o cadastro antes de entrar. Se já possui conta, use sua senha ou solicite a recuperação.");
+                    return;
+                }
                 usuarioAtual.bancoConectado = true;
             } catch (erro) {
                 mostrarErroCadastro(
@@ -1256,6 +1269,8 @@ function abrirModalTrocaSenha(titulo, descricao, modo) {
     document.querySelector("#erro-trocar-senha").textContent = "";
     document.querySelector("#form-trocar-senha-obrigatoria").reset();
     document.querySelector("#modal-trocar-senha").classList.remove("escondido");
+    document.querySelector("#cancelar-troca-senha").textContent = modoTrocaSenha === "conta" ? "Cancelar" : "Voltar ao login";
+    document.querySelector("#nova-senha-obrigatoria").focus();
 }
 
 document
@@ -1296,6 +1311,7 @@ document
                 });
 
                 salvarUsuarioLocal(usuarioAtual);
+                usuarioAtual.precisaTrocarSenha = perfil.precisaTrocarSenha === true;
                 if (perfil.precisaTrocarSenha) {
                     abrirModalTrocaSenha(
                         "Crie sua nova senha",
@@ -1310,7 +1326,7 @@ document
                 const detalhe = String(erro && erro.message || "").toLowerCase();
                 mostrarErroLogin(
                     detalhe.includes("invalid login credentials")
-                        ? "A senha informada não é a senha atual desta conta. Redefina a senha para recuperar o acesso."
+                        ? "E-mail ou senha incorretos. Confira os dados ou solicite a recuperação de senha."
                         : (erro.message || "E-mail ou senha incorretos.")
                 );
                 return;
@@ -1372,11 +1388,19 @@ document
         const botao = this.querySelector("button[type=submit]");
         botao.disabled = true;
         try {
-            await window.MalteriaBanco.trocarSenhaObrigatoria(novaSenha);
+            if (window.MalteriaBanco?.configurado) {
+                await window.MalteriaBanco.trocarSenhaObrigatoria(novaSenha);
+            } else if (modoTrocaSenha === "conta" && usuarioAtual) {
+                usuarioAtual.senha = novaSenha;
+                salvarUsuarioLocal(usuarioAtual);
+            } else {
+                throw new Error("Entre na sua conta antes de alterar a senha.");
+            }
+            if (usuarioAtual) usuarioAtual.precisaTrocarSenha = false;
             document.querySelector("#modal-trocar-senha").classList.add("escondido");
             this.reset();
             if (modoTrocaSenha === "recuperacao") {
-                await window.MalteriaBanco.sair();
+                await window.MalteriaBanco.sair({ sincronizar: false });
                 usuarioAtual = null;
                 abrirLoginLimpo();
                 document.querySelector("#erro-login").textContent =
@@ -1385,7 +1409,10 @@ document
                 entrarNoAplicativo();
             }
         } catch (falha) {
-            erro.textContent = falha.message || "Não foi possível trocar a senha.";
+            const detalhe = String(falha.message || "");
+            erro.textContent = /auth session missing|refresh token|jwt expired/i.test(detalhe)
+                ? "Sua sessão expirou. Volte ao login e solicite um novo link de recuperação."
+                : detalhe || "Não foi possível trocar a senha.";
         } finally {
             botao.disabled = false;
         }
@@ -1418,20 +1445,21 @@ document.querySelector("#mostrar-senha-login").addEventListener("click", functio
     const campo = document.querySelector("#login-senha");
     campo.readOnly = false;
     campo.type = campo.type === "password" ? "text" : "password";
-    this.textContent = campo.type === "password" ? "👁️" : "🙈";
+    this.textContent = campo.type === "password" ? "Mostrar" : "Ocultar";
+    this.setAttribute("aria-pressed", String(campo.type === "text"));
 });
 
 document.querySelector("#esqueci-senha-login").addEventListener("click", async function () {
     const email = document.querySelector("#login-email").value.trim();
     const mensagem = document.querySelector("#erro-login");
-    if (!email || !email.includes("@")) {
+    if (!email || !document.querySelector("#login-email").checkValidity()) {
         mensagem.textContent = "Digite primeiro o e-mail da conta que deseja recuperar.";
         return;
     }
     this.disabled = true;
     try {
         await window.MalteriaBanco.enviarRedefinicaoSenha(email);
-        mensagem.textContent = "Enviamos um link para " + email + ". Abra somente o e-mail mais recente e escolha sua nova senha na Maltéria.";
+        mensagem.textContent = "Se houver uma conta para esse e-mail, você receberá um link. Abra o e-mail mais recente para criar sua nova senha.";
     } catch (erro) {
         const detalhe = String(erro && erro.message || "").toLowerCase();
         if (detalhe.includes("rate limit") || detalhe.includes("too many")) {
@@ -1453,6 +1481,10 @@ function mostrarErroLogin(mensagem) {
 /* ENTRAR NO APLICATIVO */
 
 function entrarNoAplicativo() {
+    if (usuarioAtual?.precisaTrocarSenha) {
+        abrirModalTrocaSenha("Crie sua nova senha", "Troque sua senha temporária antes de continuar.", "obrigatoria");
+        return;
+    }
     mostrarTela(aplicativo);
 
     if (!usuarioAtual.bancoConectado) {
@@ -10344,3 +10376,21 @@ function protegerTexto(texto) {
 
     return elemento.innerHTML;
 }
+
+// Saída explícita sem bloquear o usuário em um link expirado.
+document.querySelector("#cancelar-troca-senha").addEventListener("click", async function () {
+    this.disabled = true;
+    try {
+        if (modoTrocaSenha !== "conta") {
+            if (window.MalteriaBanco?.configurado) await window.MalteriaBanco.sair();
+            sessionStorage.removeItem("malteriaRecuperacaoSenha");
+            history.replaceState({}, document.title, location.pathname);
+            usuarioAtual = null;
+            abrirLoginLimpo();
+        }
+        document.querySelector("#form-trocar-senha-obrigatoria").reset();
+        document.querySelector("#modal-trocar-senha").classList.add("escondido");
+    } catch (erro) {
+        document.querySelector("#erro-trocar-senha").textContent = erro.message;
+    } finally { this.disabled = false; }
+});
