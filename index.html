@@ -261,7 +261,7 @@
                         data-form-type="other"
                         required
                     >
-                    <button id="mostrar-senha-login" type="button" aria-label="Mostrar ou esconder senha">👁️</button>
+                    <button id="mostrar-senha-login" type="button" aria-label="Mostrar ou esconder senha" aria-pressed="false">Mostrar</button>
                 </div>
 
                 <button class="botao-principal">
@@ -332,9 +332,12 @@
                     readonly
                     data-lpignore="true"
                     data-form-type="other"
-                    minlength="6"
+                    minlength="8"
                     required
                 >
+
+                <label for="cadastro-confirmar-senha">Confirmar senha</label>
+                <input id="cadastro-confirmar-senha" type="password" autocomplete="new-password" minlength="8" required>
 
                 <label>Tipo de conta</label>
 
@@ -1469,6 +1472,7 @@
                 <label>Confirmar nova senha<input id="confirmar-senha-obrigatoria" type="password" minlength="8" required autocomplete="new-password"></label>
                 <p id="erro-trocar-senha" class="erro-formulario" aria-live="polite"></p>
                 <button class="botao-principal" type="submit">Salvar nova senha</button>
+                <button id="cancelar-troca-senha" class="botao-secundario" type="button">Cancelar</button>
             </form>
         </section>
     </div>
