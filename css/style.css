@@ -6441,6 +6441,7 @@ body {
     border-radius: 10px;
     background: #eafcff;
 }
+
 /* CORREÇÃO DOS CARTÕES DE MATÉRIAS DO SIMULADÃO */
 
 #lista-materias-simuladao {
@@ -6472,3 +6473,15 @@ body {
     display: block;
     text-overflow: ellipsis;
 }
+
+/* Maltéria — identidade visual, setembro de 2026 */
+:root { --roxo: #6544c0; --roxo-escuro: #49318e; --fundo: #f7f6fa; --texto: #292538; --cinza: #625d72; --borda: #e5e1ed; --sombra: 0 12px 36px rgba(45,32,76,.08); }
+.enfeites-visiveis-pagina, .arte-lateral-pagina, .decoracao-estudos { display: none !important; }
+.cabecalho-ferramenta > span, .icone-modal-administracao { display: none; }
+.cabecalho-ferramenta { background: linear-gradient(120deg, #49318e, #7151b7); color: #fff; }
+.cartao { box-shadow: var(--sombra); }
+button, input, select, textarea { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid #8b68d5; outline-offset: 3px; }
+#mostrar-senha-login { min-width: 78px; font-size: .85rem; }
+#cancelar-troca-senha { margin-top: 10px; width: 100%; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
