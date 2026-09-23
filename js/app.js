@@ -724,35 +724,17 @@ function limparCamposDeAcesso(formulario) {
 }
 
 function protegerCamposContraPreenchimento(formulario) {
-    formulario
-        .querySelectorAll("input:not([type='radio']):not([type='checkbox'])")
-        .forEach(function (campo, indice) {
-            campo.value = "";
-            campo.readOnly = true;
-            campo.name =
-                "campo-vazio-" + Date.now() + "-" + indice;
-
-            function liberarCampo() {
-                campo.readOnly = false;
-                campo.value = "";
-
-                if (campo.id.includes("email")) {
-                    campo.type = "email";
-                }
-            }
-
-            campo.addEventListener(
-                "pointerdown",
-                liberarCampo,
-                { once: true }
-            );
-
-            campo.addEventListener(
-                "keydown",
-                liberarCampo,
-                { once: true }
-            );
-        });
+    formulario.querySelectorAll("input").forEach(function (campo) {
+        campo.readOnly = false;
+        if (campo.id.includes("email")) campo.type = "email";
+    });
+    const senha = formulario.querySelector("#login-senha");
+    if (senha) {
+        senha.type = "password";
+        const mostrar = document.querySelector("#mostrar-senha-login");
+        mostrar.textContent = "Mostrar";
+        mostrar.setAttribute("aria-pressed", "false");
+    }
 }
 
 function abrirLoginLimpo() {
@@ -764,10 +746,7 @@ function abrirLoginLimpo() {
     document.querySelector("#erro-login").textContent = "";
     mostrarTela(telaLogin);
 
-    window.setTimeout(function () {
-        limparCamposDeAcesso(formulario);
-        protegerCamposContraPreenchimento(formulario);
-    }, 250);
+
 }
 
 function abrirCadastroLimpo() {
@@ -781,12 +760,7 @@ function abrirCadastroLimpo() {
     document.querySelector("#opcao-familia-aluno")?.classList.remove("escondido");
     mostrarTela(telaCadastro);
 
-    window.setTimeout(function () {
-        limparCamposDeAcesso(formulario);
-        protegerCamposContraPreenchimento(formulario);
-        dadosFilho?.classList.add("escondido");
-        document.querySelector("#opcao-familia-aluno")?.classList.remove("escondido");
-    }, 250);
+
 }
 
 document
@@ -1023,12 +997,38 @@ opcoesTipoConta.forEach(function (opcao) {
     });
 });
 
+function mensagemErroAcesso(erro) {
+    const texto = String(erro?.message || erro || "");
+    if (/failed to fetch|fetch failed|networkerror|network request failed|load failed|aborterror|timeout/i.test(texto)) {
+        return "Não foi possível conectar ao serviço de contas da Maltéria. Isso não indica senha incorreta. Tente novamente mais tarde; se persistir, o serviço precisa ser verificado.";
+    }
+    if (/invalid login credentials/i.test(texto)) return "E-mail ou senha incorretos. Confira os dados ou use Esqueci minha senha.";
+    if (/email not confirmed/i.test(texto)) return "Confirme seu cadastro pelo link recebido no e-mail antes de entrar.";
+    if (/rate limit|too many/i.test(texto)) return "Muitas tentativas em pouco tempo. Aguarde antes de tentar novamente.";
+    if (/same_password|same password|different from the old/i.test(texto)) return "Escolha uma senha diferente da senha atual.";
+    return texto || "Não foi possível concluir. Tente novamente.";
+}
+
+function verificarServicoDeContas() {
+    if (window.MALTERIA_BANCO_CONFIG?.url && !window.MalteriaBanco?.configurado) {
+        throw new Error("O serviço de contas não carregou. Confira sua conexão e recarregue a página.");
+    }
+}
+
 /* CADASTRO */
 
 document
     .querySelector("#form-cadastro")
     .addEventListener("submit", async function (evento) {
         evento.preventDefault();
+        if (this.dataset.enviando === "1") return;
+        try { verificarServicoDeContas(); } catch (erro) { mostrarErroCadastro(erro.message); return; }
+        this.dataset.enviando = "1";
+        const botaoEnvio = this.querySelector("button[type=submit], button:not([type])");
+        const rotuloEnvio = botaoEnvio.textContent;
+        botaoEnvio.disabled = true;
+        botaoEnvio.textContent = "Aguarde…";
+        try {
         document.querySelector("#erro-login").textContent = "";
 
         const nome = document
@@ -1143,7 +1143,7 @@ document
                 usuarioAtual.bancoConectado = true;
             } catch (erro) {
                 mostrarErroCadastro(
-                    erro.message || "Não foi possível criar a conta."
+                    mensagemErroAcesso(erro)
                 );
                 return;
             }
@@ -1159,6 +1159,11 @@ document
         }
 
         entrarNoAplicativo();
+        } finally {
+            this.dataset.enviando = "0";
+            botaoEnvio.disabled = false;
+            botaoEnvio.textContent = rotuloEnvio;
+        }
     });
 
 function mostrarErroCadastro(mensagem) {
@@ -1277,6 +1282,14 @@ document
     .querySelector("#form-login")
     .addEventListener("submit", async function (evento) {
         evento.preventDefault();
+        if (this.dataset.enviando === "1") return;
+        try { verificarServicoDeContas(); } catch (erro) { mostrarErroLogin(erro.message); return; }
+        this.dataset.enviando = "1";
+        const botaoEnvio = this.querySelector("button[type=submit], button:not([type])");
+        const rotuloEnvio = botaoEnvio.textContent;
+        botaoEnvio.disabled = true;
+        botaoEnvio.textContent = "Aguarde…";
+        try {
 
         const email = document
             .querySelector("#login-email")
@@ -1327,7 +1340,7 @@ document
                 mostrarErroLogin(
                     detalhe.includes("invalid login credentials")
                         ? "E-mail ou senha incorretos. Confira os dados ou solicite a recuperação de senha."
-                        : (erro.message || "E-mail ou senha incorretos.")
+                        : mensagemErroAcesso(erro)
                 );
                 return;
             }
@@ -1367,6 +1380,11 @@ document
         salvarUsuarioLocal(usuarioAtual);
 
         entrarNoAplicativo();
+        } finally {
+            this.dataset.enviando = "0";
+            botaoEnvio.disabled = false;
+            botaoEnvio.textContent = rotuloEnvio;
+        }
     });
 
 document
@@ -1412,7 +1430,7 @@ document
             const detalhe = String(falha.message || "");
             erro.textContent = /auth session missing|refresh token|jwt expired/i.test(detalhe)
                 ? "Sua sessão expirou. Volte ao login e solicite um novo link de recuperação."
-                : detalhe || "Não foi possível trocar a senha.";
+                : mensagemErroAcesso(falha);
         } finally {
             botao.disabled = false;
         }
@@ -1465,7 +1483,7 @@ document.querySelector("#esqueci-senha-login").addEventListener("click", async f
         if (detalhe.includes("rate limit") || detalhe.includes("too many")) {
             mensagem.textContent = "Muitos e-mails foram solicitados. Use o link mais recente que já chegou ou aguarde até 1 hora antes de pedir outro.";
         } else {
-            mensagem.textContent = erro.message || "Não foi possível enviar o link de recuperação.";
+            mensagem.textContent = mensagemErroAcesso(erro);
         }
     } finally {
         this.disabled = false;
@@ -10394,3 +10412,94 @@ document.querySelector("#cancelar-troca-senha").addEventListener("click", async 
         document.querySelector("#erro-trocar-senha").textContent = erro.message;
     } finally { this.disabled = false; }
 });
+
+
+/* MALTERIA: ILUSTRACOES E TEMA MENSAL INTEGRADOS */
+/* Camada visual: não altera contas, dados, eventos ou integrações. */
+(()=>{'use strict';
+const imagens={"livros":{"codigo":"1A","nome":"Livros azuis","url":"https://cdn3d.iconscout.com/3d/premium/thumb/books-stack-3d-icon-png-download-12017564.png","licenca":"Prévia premium; arquivo licenciado pendente"},"pesquisa":{"codigo":"2A","nome":"Sua lupa azul","url":"images/selecionadas/pesquisa.png","licenca":"Arquivo fornecido pelo usuário; licença não verificada"},"cerebro":{"codigo":"3A","nome":"Seu cérebro coral","url":"images/selecionadas/cerebro.png","licenca":"Arquivo fornecido pelo usuário; licença não verificada"},"prancheta":{"codigo":"4A","nome":"Sua prancheta lilás","url":"images/selecionadas/prancheta.png","licenca":"Arquivo fornecido pelo usuário; licença não verificada"},"agenda":{"codigo":"5B","nome":"Calendário com relógio","url":"https://cdn3d.iconscout.com/3d/premium/thumb/event-reminder-3d-icon-png-download-13390783.png","licenca":"Prévia premium; arquivo licenciado pendente"},"sino":{"codigo":"6B","nome":"Sino amarelo","url":"https://cdn3d.iconscout.com/3d/premium/thumb/campana-de-notificacion-3d-icon-png-download-4573720.png","licenca":"Prévia premium; arquivo licenciado pendente"},"redacao":{"codigo":"7D","nome":"Folha com lápis amarelo","url":"https://cdn3d.iconscout.com/3d/premium/thumb/sheet-and-pencil-3d-icon-png-download-7250816.png","licenca":"Prévia premium; arquivo licenciado pendente"},"pasta":{"codigo":"8B","nome":"Pasta amarela","url":"https://cdn3d.iconscout.com/3d/premium/thumb/file-folder-3d-icon-png-download-11901441.png","licenca":"Prévia premium; arquivo licenciado pendente"},"meta":{"codigo":"9B","nome":"Alvo com crescimento","url":"https://cdn3d.iconscout.com/3d/premium/thumb/target-growth-3d-icon-png-download-13869304.png","licenca":"Prévia premium; arquivo licenciado pendente"},"evolucao":{"codigo":"10B","nome":"Gráfico rosa e roxo","url":"https://cdn3d.iconscout.com/3d/premium/thumb/target-business-3d-icon-png-download-4497557.png","licenca":"Prévia premium; arquivo licenciado pendente"},"slides":{"codigo":"11B","nome":"Quadro roxo","url":"https://cdn3d.iconscout.com/3d/premium/thumb/presentation-board-3d-icon-download-in-png-blend-fbx-gltf-file-formats--growth-graph-education-business-pack-icons-5231814.png","licenca":"Prévia premium; arquivo licenciado pendente"},"audio":{"codigo":"12C","nome":"Microfone lilás e azul","url":"https://cdn3d.iconscout.com/3d/premium/thumb/microphone-3d-icon-png-download-12323861.png","licenca":"Prévia premium; arquivo licenciado pendente"},"seguranca":{"codigo":"13B","nome":"Escudo com confirmação","url":"https://cdn3d.iconscout.com/3d/premium/thumb/shield-3d-icon-png-download-8231227.png","licenca":"Prévia premium; arquivo licenciado pendente"},"ajuda":{"codigo":"14B","nome":"Balão com headset","url":"https://cdn3d.iconscout.com/3d/premium/thumb/customer-support-3d-icon-download-in-png-blend-fbx-gltf-file-formats--call-logo-service-online-shopping-pack-marketplace-icons-8852717.png","licenca":"Prévia premium; arquivo licenciado pendente"},"familia":{"codigo":"15B","nome":"Responsável e criança","url":"https://cdn3d.iconscout.com/3d/premium/thumb/parent-and-child-3d-icon-png-download-12417098.png","licenca":"Prévia premium; arquivo licenciado pendente"}};
+function imagem(chave){const img=document.createElement('img');img.src=imagens[chave].url;img.className='malteria-imagem-3d';img.alt='';img.setAttribute('aria-hidden','true');img.decoding='async';img.addEventListener('error',()=>{img.hidden=true;},{once:true});return img;}
+function substituir(seletor,chave){document.querySelectorAll(seletor).forEach(el=>{if(el.querySelector('.malteria-imagem-3d'))return;el.replaceChildren(imagem(chave));el.classList.add('malteria-suporte-3d');});}
+const menu={'correcao-lateral':'prancheta','gabaritos-lateral':'prancheta','agenda-lateral':'agenda','lembretes-lateral':'sino','materias-lateral':'livros','redacoes-lateral':'redacao','trabalhos-lateral':'pasta','pesquisa':'pesquisa','nivel-melhora':'evolucao','pratica':'cerebro','administracao':'seguranca','ajuda':'ajuda'};
+Object.entries(menu).forEach(([id,chave])=>substituir('#abrir-'+id+' .ferramenta-icone',chave));
+const atalhos={agenda:'agenda',lembretes:'sino',materias:'livros',redacoes:'redacao',trabalhos:'pasta',meta:'evolucao',simulados:'cerebro',correcao:'prancheta',gabaritos:'prancheta',pesquisa:'pesquisa',ajuda:'ajuda'};
+Object.entries(atalhos).forEach(([id,chave])=>substituir('[data-atalho-pagina="'+id+'"] > span',chave));
+const paginas={'agenda':'agenda','lembretes':'sino','correcao':'prancheta','gabaritos':'prancheta','materias':'livros','trabalhos':'pasta','redacoes':'redacao','pesquisa':'pesquisa','ajuda':'ajuda','nivel-melhora':'evolucao','pratica':'cerebro','administracao':'seguranca'};
+Object.entries(paginas).forEach(([id,chave])=>substituir('#pagina-'+id+' .cabecalho-ferramenta > span',chave));
+['livros','pesquisa','cerebro','slides','redacao'].forEach((chave,i)=>substituir('.entrada-demonstracao .orbita:nth-child('+(i+1)+')',chave));
+['livros','redacao','cerebro','slides'].forEach((chave,i)=>substituir('.decoracao-estudos > span:nth-child('+(i+1)+')',chave));
+['livros','pesquisa','cerebro','agenda','pasta','familia'].forEach((chave,i)=>substituir('.entrada-recursos article:nth-child('+(i+1)+') > span',chave));
+substituir('.meta-bimestral-cabecalho > span','meta');substituir('.icone-modal-administracao','seguranca');
+document.querySelectorAll('.demonstracao-opcoes > span, #entrar-demonstracao').forEach(el=>{for(const node of el.childNodes)if(node.nodeType===3)node.textContent=node.textContent.replace(/^[\s\p{Extended_Pictographic}\uFE0F\u200D]+/u,'');});
+function dinamicos(){substituir('.cartao-materia > span','livros');substituir('#icone-materia','livros');const formatos={explicacao:'livros',copia:'redacao',slides:'slides',revisao:'cerebro',audio:'audio'};document.querySelectorAll('.opcoes-explicacao button[data-estudo]').forEach(el=>{const chave=formatos[el.dataset.estudo];if(!chave||el.querySelector('.malteria-imagem-3d'))return;for(const node of el.childNodes)if(node.nodeType===3)node.textContent=node.textContent.replace(/^[\s\p{Extended_Pictographic}\uFE0F\u200D]+/u,'');el.prepend(imagem(chave));});substituir('.audio-professora-icone','audio');}
+dinamicos();let agendado=false;const observer=new MutationObserver(()=>{if(agendado)return;agendado=true;requestAnimationFrame(()=>{agendado=false;dinamicos();});});
+for(const id of ['area-materia','icone-materia','lista-materias']){const el=document.getElementById(id);if(el)observer.observe(el,{childList:true,subtree:true});}
+})();
+
+/* Conteúdo editorial mensal. Não coleta relatos nem dados de saúde. */
+(() => {
+  'use strict';
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const temas = [
+    ['Recomeços possíveis','Um passo de cada vez também é um começo.','Escolha uma pequena intenção para este ano. Você pode mudar o caminho enquanto aprende.', 'Comece pequeno','Organize um horário possível de estudo e descanso, sem tentar resolver o ano inteiro de uma vez.'],
+    ['Pertencer e acolher','Há espaço para diferentes jeitos de aprender.','Voltar à rotina pode trazer entusiasmo e insegurança. Peça ajuda para entender o que ainda é novo.', 'Faça uma aproximação','Convide alguém para uma atividade e respeite se a pessoa preferir outro momento.'],
+    ['Respeito no cotidiano','Ouvir também é uma forma de aprender.','Uma comunidade fica melhor quando todos podem participar e ter sua voz respeitada.', 'Pratique a escuta','Numa conversa, deixe a outra pessoa terminar e pergunte antes de tirar conclusões.'],
+    ['Histórias que aproximam','Cada leitura abre uma conversa.','Livros, relatos e histórias podem apresentar experiências diferentes das nossas.', 'Compartilhe uma descoberta','Escolha uma passagem de uma leitura e conte por que ela chamou sua atenção.'],
+    ['Quem cuida de nós','Famílias e redes de apoio têm muitas formas.','Reconheça as pessoas que oferecem cuidado: responsáveis, parentes, amigos e educadores.', 'Demonstre carinho','Escreva um agradecimento para alguém de confiança. Não precisa ser uma mensagem perfeita.'],
+    ['Cultura e convivência','Conhecer tradições é conhecer pessoas.','Músicas, comidas e histórias compartilhadas fazem parte das memórias de uma comunidade.', 'Investigue uma tradição','Pergunte a alguém como eram as celebrações de sua infância e compare com as de hoje.'],
+    ['Pausa também importa','Descansar faz parte da vida.','Equilibre atividades, convivência e momentos sem tarefas. As férias, quando existem no seu calendário, podem ter ritmos diferentes.', 'Reserve um intervalo','Escolha uma atividade de lazer que caiba na sua realidade, sem transformar descanso em obrigação.'],
+    ['Aprender com apoio','Dificuldade não define quem você é.','Uma dúvida é um ponto de partida. Experimente outra explicação e procure quem possa estudar com você.', 'Leve uma pergunta','Anote uma dúvida para conversar com um professor ou colega.'],
+    ['Setembro Amarelo','Você merece cuidado e companhia.','Um mês de valorização da vida, prevenção do suicídio e conversa responsável sobre saúde mental.', 'Depressão tem tratamento','Depressão não é preguiça nem falta de força de vontade. Pode afetar o interesse, o sono, a energia e a vida cotidiana. Uma avaliação profissional ajuda a entender o que está acontecendo.'],
+    ['Criatividade e descobertas','A curiosidade pode começar com uma pergunta.','Desenhar, inventar, ler e brincar são maneiras de explorar ideias em diferentes idades.', 'Experimente sem cobrança','Crie algo pequeno usando materiais que você já tem. O processo vale mais que a perfeição.'],
+    ['Respeito às diferenças','Aprender também é rever atitudes.','Valorize histórias e contribuições de pessoas negras e converse sobre como enfrentar o racismo no cotidiano.', 'Procure novas referências','Conheça um autor, cientista ou artista negro e compartilhe o que aprendeu, citando a fonte.'],
+    ['Natal e novos começos','Celebrar, acolher e abrir espaço para o próximo ano.','Para os cristãos, o Natal celebra o nascimento de Jesus. Outras pessoas vivem a data como encontro e solidariedade, ou não a celebram. Todas essas experiências merecem respeito.', 'Um recomeço sem pressão','O Ano-Novo pode inspirar planos, mas você não precisa mudar tudo em janeiro. Reconheça um aprendizado e escolha um próximo passo possível.']
+  ];
+  const painel = document.createElement('section');
+  painel.id = 'pagina-tema-mes';
+  painel.className = 'pagina-ferramenta escondido tema-mes';
+  painel.setAttribute('aria-labelledby','tema-titulo');
+  painel.innerHTML = '<button type="button" id="voltar-tema-mes" class="botao-link">← Voltar ao início</button><div class="tema-controles"><label for="tema-mes-seletor">Escolha o mês</label><select id="tema-mes-seletor"></select><button type="button" id="tema-hoje" class="botao-secundario">Mês atual</button></div><div id="tema-conteudo" aria-live="polite"></div>';
+  document.querySelector('main.conteudo').append(painel);
+  // Participa da navegação existente, inclusive ao sair por outro atalho.
+  paginasInternas.push(painel);
+  const seletor = painel.querySelector('select');
+  meses.forEach((nome,i)=>seletor.add(new Option(nome,String(i))));
+  const imagemAgenda = document.querySelector('#abrir-agenda-lateral img');
+  function arte(){return imagemAgenda ? imagemAgenda.cloneNode(true) : document.createTextNode('');}
+  const botao = document.createElement('button');
+  botao.type = 'button';botao.id = 'abrir-tema-mes';botao.className = 'ferramenta-lateral';botao.setAttribute('aria-label','Tema do mês');
+  botao.innerHTML = '<span class="ferramenta-icone malteria-suporte-3d"></span><span class="ferramenta-texto">Tema do mês</span>';
+  botao.firstElementChild.append(arte());document.querySelector('#abrir-ajuda').before(botao);
+  const atalho = document.createElement('button');atalho.type='button';atalho.id='atalho-tema-mes';
+  atalho.innerHTML='<span class="malteria-suporte-3d"></span><strong>Tema do mês</strong><small></small>';
+  atalho.firstElementChild.append(arte());document.querySelector('.atalhos-inicio').append(atalho);
+  function renderizar(indice){
+    const [titulo,subtitulo,intro,acao,descricao]=temas[indice];
+    seletor.value=String(indice);painel.dataset.mes=String(indice+1);
+    const conteudo=painel.querySelector('#tema-conteudo');
+    conteudo.replaceChildren();
+    const hero=document.createElement('header');hero.className='tema-hero';
+    const etiqueta=document.createElement('p');etiqueta.className='tema-etiqueta';etiqueta.textContent=meses[indice]+' · Tema do mês';
+    const h=document.createElement('h1');h.id='tema-titulo';h.textContent=titulo;
+    const sub=document.createElement('p');sub.className='tema-subtitulo';sub.textContent=subtitulo;
+    const texto=document.createElement('p');texto.textContent=intro;hero.append(etiqueta,h,sub,texto);conteudo.append(hero);
+    function bloco(t,p){const a=document.createElement('article');a.className='tema-bloco';const cab=document.createElement('h2');cab.textContent=t;const par=document.createElement('p');par.textContent=p;a.append(cab,par);conteudo.append(a);}
+    bloco(acao,descricao);
+    if(indice===8){
+      bloco('Como buscar ajuda','Converse com alguém de confiança e procure uma UBS ou um profissional de saúde. Se você é menor de idade, peça apoio a um responsável ou educador de confiança. O cuidado pode incluir psicoterapia e, quando indicado, medicamentos acompanhados por médico.');
+      bloco('Como acolher alguém','Escute sem julgar e ofereça companhia para buscar ajuda. Evite cobrar que a pessoa “reaja” ou prometer guardar segredo se houver risco à vida. Você não precisa cuidar de tudo sozinho.');
+      const ajuda=document.createElement('aside');ajuda.className='tema-apoio';ajuda.setAttribute('aria-label','Onde buscar apoio no Brasil');
+      ajuda.innerHTML='<h2>Onde encontrar apoio no Brasil</h2><p>Para conversar, o <a href="tel:188">CVV atende pelo 188</a>, gratuitamente, 24 horas. Em risco imediato, procure uma emergência ou <a href="tel:192">ligue para o SAMU 192</a> e busque a companhia de alguém de confiança.</p><p>Este conteúdo é educativo e não substitui avaliação profissional.</p><p><a href="https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/d/depressao" target="_blank" rel="noopener noreferrer">Depressão: Ministério da Saúde</a> · <a href="https://www.gov.br/saude/pt-br/assuntos/saude-de-a-a-z/s/suicidio-prevencao" target="_blank" rel="noopener noreferrer">Prevenção e rede de apoio</a></p>';
+      conteudo.append(ajuda);
+    }
+    if(indice===11)bloco('Convivência sem obrigação','Uma mensagem carinhosa, uma ajuda prática ou um momento tranquilo podem ter significado. Festas também podem trazer saudade e sentimentos misturados: não existe obrigação de estar feliz.');
+  }
+  function mesAtual(){return new Date().getMonth();}
+  function abrir(){renderizar(mesAtual());mostrarPaginaInterna(painel);painel.querySelector('#tema-titulo').tabIndex=-1;painel.querySelector('#tema-titulo').focus({preventScroll:true});}
+  botao.addEventListener('click',abrir);atalho.addEventListener('click',abrir);
+  painel.querySelector('#voltar-tema-mes').addEventListener('click',()=>{mostrarPaginaInterna(paginaPrincipal);atalho.focus({preventScroll:true});});
+  seletor.addEventListener('change',()=>renderizar(Number(seletor.value)));
+  painel.querySelector('#tema-hoje').addEventListener('click',()=>renderizar(mesAtual()));
+  atalho.querySelector('small').textContent=meses[mesAtual()]+': '+temas[mesAtual()][0]+'.';
+  renderizar(mesAtual());
+})();
