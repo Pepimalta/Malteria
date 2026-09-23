@@ -6485,3 +6485,53 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 #mostrar-senha-login { min-width: 78px; font-size: .85rem; }
 #cancelar-troca-senha { margin-top: 10px; width: 100%; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+
+/* Campo de senha: botão com espaço próprio, sem sobreposição. */
+.campo-senha-com-botao { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; gap: 8px; }
+.campo-senha-com-botao input { min-width: 0; padding-right: 14px; }
+.campo-senha-com-botao #mostrar-senha-login { position: static; transform: none; top: auto; right: auto; width: auto; min-width: 78px; height: auto; min-height: 46px; padding: 0 12px; color: #49318e; font-weight: 600; }
+#erro-login, #erro-cadastro, #erro-trocar-senha { line-height: 1.5; overflow-wrap: anywhere; }
+button:disabled { cursor: wait; opacity: .7; }
+
+
+/* MALTERIA: ILUSTRACOES E TEMA MENSAL INTEGRADOS */
+/* Identidade escolhida em 21/09/2026. */
+.malteria-imagem-3d{display:block;width:100%;height:100%;object-fit:contain;pointer-events:none}
+.malteria-imagem-3d[hidden]{display:none}
+.decoracao-estudos > span.malteria-suporte-3d{display:inline-block;width:52px;height:52px;padding:0}
+.malteria-suporte-3d,.malteria-imagem-3d{background:transparent!important;border:0!important;box-shadow:none!important;border-radius:0!important;outline:0!important}
+.malteria-suporte-3d::before,.malteria-suporte-3d::after{content:none!important}
+.atalhos-inicio button > span.malteria-suporte-3d{display:block;width:56px;height:56px;padding:0;align-self:center}
+.cabecalho-ferramenta > span.malteria-suporte-3d{display:block!important;flex:0 0 88px;width:88px;height:88px;background:transparent;box-shadow:none;padding:0;animation:none}
+.ferramenta-icone.malteria-suporte-3d{display:block;flex:0 0 38px;width:38px;height:38px;background:transparent;padding:0}
+.entrada-recursos article > span.malteria-suporte-3d{display:block;width:72px;height:72px;background:transparent;box-shadow:none;padding:0}
+.orbita.malteria-suporte-3d{width:78px;height:78px;background:transparent;box-shadow:none;border:0;padding:0}
+.meta-bimestral-cabecalho > span.malteria-suporte-3d{display:block;width:80px;height:80px;flex:0 0 80px}
+#icone-materia.malteria-suporte-3d{width:78px;height:78px;margin:0 auto 16px}
+.icone-modal-administracao.malteria-suporte-3d{display:block;width:70px;height:70px;margin:0 auto 12px}
+.opcoes-explicacao button[data-estudo]{display:flex;align-items:center;justify-content:center;gap:10px}
+.opcoes-explicacao .malteria-imagem-3d{width:38px;height:38px;flex:0 0 38px}
+.audio-professora-icone.malteria-suporte-3d{width:64px;height:64px;display:block;flex:0 0 64px}
+.intro-emojis-flutuantes,.mini-emoji{display:none!important}
+@media(max-width:600px){.cabecalho-ferramenta > span.malteria-suporte-3d{width:60px;height:60px;flex-basis:60px}.orbita.malteria-suporte-3d{width:52px;height:52px}.entrada-recursos article > span.malteria-suporte-3d{width:56px;height:56px}}
+@media(prefers-reduced-motion:reduce){.orbita.malteria-suporte-3d{animation:none!important}}
+
+.cartao-materia > span.malteria-suporte-3d{display:block;width:64px;height:64px;margin:0 auto 12px;padding:0}
+
+.tema-mes{max-width:1040px;margin:0 auto;padding-bottom:32px;color:#292339}
+.tema-controles{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:24px 0}
+.tema-controles select{width:auto;min-width:160px;max-width:100%;padding:12px;border:1px solid #c9bfdc;border-radius:12px;background:#fff;color:#292339;font:inherit}
+.tema-hero{position:relative;overflow:hidden;padding:36px;border-radius:24px;background:#eee7fa;isolation:isolate}
+.tema-hero:after{content:'';position:absolute;z-index:-1;right:-40px;top:-75px;width:220px;height:220px;border:35px solid #ffffff55;border-radius:50%;pointer-events:none}
+.tema-hero h1{font-size:clamp(28px,5vw,42px);line-height:1.15;margin:12px 0 18px;color:inherit}
+.tema-etiqueta{font-size:14px;font-weight:600;letter-spacing:.05em}
+.tema-subtitulo{font-size:22px;font-weight:600}
+.tema-mes p{line-height:1.7;max-width:75ch}
+.tema-bloco{padding:20px 0;border-bottom:1px solid #ddd5e7}
+.tema-bloco h2,.tema-apoio h2{font-size:21px;margin:8px 0}
+.tema-apoio{padding:24px;background:#fff6d9;border-radius:18px;margin-top:24px;color:#443510}
+.tema-mes a{color:#4a357e;text-decoration:underline;text-underline-offset:3px}
+.tema-mes[data-mes="9"] .tema-hero{background:linear-gradient(120deg,#ffe28a,#fff4cf);color:#443510}
+.tema-mes[data-mes="12"] .tema-hero{background:linear-gradient(120deg,#e2f2e6,#fbf0e4);color:#244d35}
+.tema-mes[data-mes="12"] .tema-hero:after{border-color:#bb47582b}
+@media(max-width:600px){.tema-hero{padding:24px}.tema-controles{align-items:stretch}.tema-controles label{width:100%}.tema-apoio{padding:18px}}
