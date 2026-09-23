@@ -238,11 +238,10 @@
 
                 <input
                     id="login-email"
-                    name="acesso-vazio-email"
-                    type="text"
+                    name="email"
+                    type="email"
                     inputmode="email"
-                    autocomplete="one-time-code"
-                    readonly
+                    autocomplete="username"
                     data-lpignore="true"
                     data-form-type="other"
                     required
@@ -255,8 +254,7 @@
                         id="login-senha"
                         name="malteria-login-senha"
                         type="password"
-                        autocomplete="new-password"
-                        readonly
+                        autocomplete="current-password"
                         data-lpignore="true"
                         data-form-type="other"
                         required
@@ -272,7 +270,7 @@
                     Esqueci minha senha
                 </button>
 
-                <p id="erro-login" class="erro"></p>
+                <p id="erro-login" class="erro" role="status" aria-live="polite"></p>
             </form>
 
             <button class="voltar botao-link">
@@ -302,7 +300,6 @@
                     name="cadastro-vazio-nome"
                     type="text"
                     autocomplete="one-time-code"
-                    readonly
                     data-lpignore="true"
                     data-form-type="other"
                     required
@@ -316,7 +313,6 @@
                     type="text"
                     inputmode="email"
                     autocomplete="one-time-code"
-                    readonly
                     data-lpignore="true"
                     data-form-type="other"
                     required
@@ -329,7 +325,6 @@
                     name="malteria-nova-senha"
                     type="password"
                     autocomplete="new-password"
-                    readonly
                     data-lpignore="true"
                     data-form-type="other"
                     minlength="8"
