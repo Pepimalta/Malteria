@@ -6,74 +6,249 @@
     <meta name="google-site-verification" content="JfZw4F1yrT_jJCnvT1YZgIcBoxcE5gQ5Lv3S0v7EqGw">
     <meta name="application-name" content="Maltéria">
     <title>Maltéria — Plataforma de apoio aos estudos</title>
-    <meta name="description" content="A Maltéria organiza informações do Google Classroom e transforma materiais escolares em explicações, revisões, slides, atividades e simulados.">
+    <meta
+        name="description"
+        content="A Maltéria organiza informações do Google Classroom e transforma materiais escolares em explicações, revisões, slides, atividades e simulados."
+    >
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; color: #24223b; font-family: Inter, Arial, sans-serif; background: radial-gradient(circle at 10% 15%, rgba(255, 117, 162, 0.18), transparent 25%), radial-gradient(circle at 90% 20%, rgba(95, 165, 255, 0.22), transparent 27%), #f8f6ff; }
+        body {
+            margin: 0;
+            color: #24223b;
+            font-family: Inter, Arial, sans-serif;
+            background:
+                radial-gradient(circle at 10% 15%, rgba(255, 117, 162, 0.18), transparent 25%),
+                radial-gradient(circle at 90% 20%, rgba(95, 165, 255, 0.22), transparent 27%),
+                #f8f6ff;
+        }
         a { color: inherit; }
-        .cabecalho { display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 1180px; margin: auto; padding: 26px 28px; }
-        .marca { display: inline-flex; align-items: center; gap: 12px; font-size: 21px; font-weight: 800; text-decoration: none; }
-        .marca span { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 14px; color: white; background: linear-gradient(135deg, #5638ec, #8b55ff, #24c5da); box-shadow: 0 10px 26px rgba(92, 55, 234, 0.28); }
+        .cabecalho {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 24px;
+            max-width: 1180px;
+            margin: auto;
+            padding: 26px 28px;
+        }
+        .marca {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 21px;
+            font-weight: 800;
+            text-decoration: none;
+        }
+        .marca span {
+            display: grid;
+            width: 44px;
+            height: 44px;
+            place-items: center;
+            border-radius: 14px;
+            color: white;
+            background: linear-gradient(135deg, #5638ec, #8b55ff, #24c5da);
+            box-shadow: 0 10px 26px rgba(92, 55, 234, 0.28);
+        }
         .cabecalho nav { display: flex; gap: 18px; }
         .cabecalho nav a { font-weight: 700; text-decoration: none; }
-        .hero { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 48px; align-items: center; max-width: 1180px; margin: auto; padding: 72px 28px 58px; }
-        .etiqueta { display: inline-block; padding: 9px 14px; border-radius: 999px; color: #5638ec; background: #eee8ff; font-size: 13px; font-weight: 800; letter-spacing: 0.12em; }
-        h1 { max-width: 760px; margin: 22px 0; font-size: clamp(42px, 6vw, 76px); line-height: 0.98; letter-spacing: -0.055em; }
-        .hero p { max-width: 720px; margin: 0 0 28px; color: #6f6b81; font-size: 19px; line-height: 1.7; }
-        .botao { display: inline-block; padding: 15px 24px; border-radius: 14px; color: white; font-weight: 800; text-decoration: none; background: linear-gradient(135deg, #5638ec, #8b55ff); box-shadow: 0 15px 30px rgba(86, 56, 236, 0.22); }
-        .painel { padding: 30px; border: 1px solid rgba(104, 72, 245, 0.18); border-radius: 28px; background: rgba(255, 255, 255, 0.82); box-shadow: 0 24px 70px rgba(58, 43, 112, 0.13); }
+        .hero {
+            display: grid;
+            grid-template-columns: 1.15fr 0.85fr;
+            gap: 48px;
+            align-items: center;
+            max-width: 1180px;
+            margin: auto;
+            padding: 72px 28px 58px;
+        }
+        .etiqueta {
+            display: inline-block;
+            padding: 9px 14px;
+            border-radius: 999px;
+            color: #5638ec;
+            background: #eee8ff;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+        }
+        h1 {
+            max-width: 760px;
+            margin: 22px 0;
+            font-size: clamp(42px, 6vw, 76px);
+            line-height: 0.98;
+            letter-spacing: -0.055em;
+        }
+        .hero p {
+            max-width: 720px;
+            margin: 0 0 28px;
+            color: #6f6b81;
+            font-size: 19px;
+            line-height: 1.7;
+        }
+        .botao {
+            display: inline-block;
+            padding: 15px 24px;
+            border-radius: 14px;
+            color: white;
+            font-weight: 800;
+            text-decoration: none;
+            background: linear-gradient(135deg, #5638ec, #8b55ff);
+            box-shadow: 0 15px 30px rgba(86, 56, 236, 0.22);
+        }
+        .painel {
+            padding: 30px;
+            border: 1px solid rgba(104, 72, 245, 0.18);
+            border-radius: 28px;
+            background: rgba(255, 255, 255, 0.82);
+            box-shadow: 0 24px 70px rgba(58, 43, 112, 0.13);
+        }
         .painel h2 { margin-top: 0; font-size: 27px; }
         .painel ul { margin: 0; padding-left: 21px; }
         .painel li { margin: 13px 0; line-height: 1.5; }
-        .recursos { max-width: 1180px; margin: auto; padding: 30px 28px 76px; }
+        .recursos {
+            max-width: 1180px;
+            margin: auto;
+            padding: 30px 28px 76px;
+        }
         .recursos > h2 { text-align: center; font-size: 34px; }
-        .recursos > p { max-width: 760px; margin: 0 auto 36px; color: #6f6b81; text-align: center; line-height: 1.7; }
-        .grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-        .grade article { padding: 25px; border: 1px solid #e4ddff; border-radius: 22px; background: white; box-shadow: 0 14px 38px rgba(55, 39, 105, 0.08); }
+        .recursos > p {
+            max-width: 760px;
+            margin: 0 auto 36px;
+            color: #6f6b81;
+            text-align: center;
+            line-height: 1.7;
+        }
+        .grade {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+        .grade article {
+            padding: 25px;
+            border: 1px solid #e4ddff;
+            border-radius: 22px;
+            background: white;
+            box-shadow: 0 14px 38px rgba(55, 39, 105, 0.08);
+        }
         .grade article span { font-size: 29px; }
         .grade h3 { margin: 16px 0 9px; }
         .grade p { margin: 0; color: #6f6b81; line-height: 1.6; }
-        .dados { max-width: 1124px; margin: 0 auto 78px; padding: 30px; border-radius: 24px; background: linear-gradient(135deg, #ebe6ff, #e8fbff); }
+        .dados {
+            max-width: 1124px;
+            margin: 0 auto 78px;
+            padding: 30px;
+            border-radius: 24px;
+            background: linear-gradient(135deg, #ebe6ff, #e8fbff);
+        }
         .dados h2 { margin-top: 0; }
         .dados p { margin-bottom: 0; line-height: 1.7; }
-        footer { padding: 28px; color: #68647b; text-align: center; background: white; }
+        footer {
+            padding: 28px;
+            color: #68647b;
+            text-align: center;
+            background: white;
+        }
         footer a { margin: 0 8px; font-weight: 700; }
-        @media (max-width: 820px) { .hero, .grade { grid-template-columns: 1fr; } .cabecalho { align-items: flex-start; flex-direction: column; } h1 { font-size: 48px; } }
+        @media (max-width: 820px) {
+            .hero, .grade { grid-template-columns: 1fr; }
+            .cabecalho { align-items: flex-start; flex-direction: column; }
+            h1 { font-size: 48px; }
+        }
     </style>
 </head>
 <body>
     <header class="cabecalho">
         <a class="marca" href="../index.html"><span>M</span>MALTÉRIA</a>
-        <nav aria-label="Documentos públicos"><a href="privacidade.html">Privacidade</a><a href="termos.html">Termos de uso</a></nav>
+        <nav aria-label="Documentos públicos">
+            <a href="privacidade.html">Privacidade</a>
+            <a href="termos.html">Termos de uso</a>
+        </nav>
     </header>
+
     <main>
         <section class="hero">
             <div>
                 <span class="etiqueta">PLATAFORMA EDUCACIONAL</span>
                 <h1>Maltéria</h1>
                 <h2>Plataforma de apoio aos estudos para alunos e responsáveis</h2>
-                <p>A Maltéria é uma plataforma educacional de apoio aos estudos para alunos e responsáveis. Ela organiza informações escolares e utiliza os materiais autorizados pelo usuário para criar explicações, revisões, slides, atividades e simulados.</p>
+                <p>
+                    A Maltéria é uma plataforma educacional de apoio aos estudos para alunos e responsáveis.
+                    Ela organiza informações escolares e utiliza os materiais autorizados pelo
+                    usuário para criar explicações, revisões, slides, atividades e simulados.
+                </p>
                 <a class="botao" href="../index.html">Acessar a Maltéria</a>
             </div>
-            <aside class="painel"><h2>Como a Maltéria ajuda</h2><ul><li>Reúne turmas, tarefas, avisos e materiais por disciplina.</li><li>Ajuda a identificar prazos e preparar o que precisa ser entregue.</li><li>Cria apoio ao estudo com base no conteúdo escolar selecionado.</li><li>Oferece acompanhamento separado para alunos e responsáveis.</li></ul></aside>
+
+            <aside class="painel">
+                <h2>Como a Maltéria ajuda</h2>
+                <ul>
+                    <li>Reúne turmas, tarefas, avisos e materiais por disciplina.</li>
+                    <li>Ajuda a identificar prazos e preparar o que precisa ser entregue.</li>
+                    <li>Cria apoio ao estudo com base no conteúdo escolar selecionado.</li>
+                    <li>Oferece acompanhamento separado para alunos e responsáveis.</li>
+                </ul>
+            </aside>
         </section>
+
         <section class="recursos">
             <h2>Recursos da plataforma</h2>
-            <p>A Maltéria complementa a organização escolar. Ela não substitui professores, documentos oficiais nem a conferência das informações diretamente na escola.</p>
+            <p>
+                A Maltéria complementa a organização escolar. Ela não substitui professores,
+                documentos oficiais nem a conferência das informações diretamente na escola.
+            </p>
             <div class="grade">
-                <article><span>🎓</span><h3>Google Classroom</h3><p>Mostra turmas, atividades, publicações e materiais autorizados pelo usuário.</p></article>
-                <article><span>🗓️</span><h3>Agenda escolar</h3><p>Organiza avisos e eventos para ajudar alunos e responsáveis a acompanharem prazos.</p></article>
-                <article><span>🔎</span><h3>Pesquisa inteligente</h3><p>Responde perguntas usando os conteúdos escolares encontrados na disciplina escolhida.</p></article>
-                <article><span>📚</span><h3>Explicações e revisões</h3><p>Transforma materiais em textos explicativos, tópicos, cópias guiadas e slides.</p></article>
-                <article><span>🎯</span><h3>Prática e simulados</h3><p>Cria exercícios de dificuldade progressiva e atividades para revisão do conteúdo.</p></article>
-                <article><span>👨‍👩‍👧</span><h3>Visão do responsável</h3><p>Ajuda a acompanhar filhos, estudos, tarefas, metas e preparação para os próximos dias.</p></article>
+                <article>
+                    <span>🎓</span>
+                    <h3>Google Classroom</h3>
+                    <p>Mostra turmas, atividades, publicações e materiais autorizados pelo usuário.</p>
+                </article>
+                <article>
+                    <span>🗓️</span>
+                    <h3>Agenda escolar</h3>
+                    <p>Organiza avisos e eventos para ajudar alunos e responsáveis a acompanharem prazos.</p>
+                </article>
+                <article>
+                    <span>🔎</span>
+                    <h3>Pesquisa inteligente</h3>
+                    <p>Responde perguntas usando os conteúdos escolares encontrados na disciplina escolhida.</p>
+                </article>
+                <article>
+                    <span>📚</span>
+                    <h3>Explicações e revisões</h3>
+                    <p>Transforma materiais em textos explicativos, tópicos, cópias guiadas e slides.</p>
+                </article>
+                <article>
+                    <span>🎯</span>
+                    <h3>Prática e simulados</h3>
+                    <p>Cria exercícios de dificuldade progressiva e atividades para revisão do conteúdo.</p>
+                </article>
+                <article>
+                    <span>👨‍👩‍👧</span>
+                    <h3>Visão do responsável</h3>
+                    <p>Ajuda a acompanhar filhos, estudos, tarefas, metas e preparação para os próximos dias.</p>
+                </article>
             </div>
         </section>
-        <section class="dados"><h2>Uso das informações do Google</h2><p>A Maltéria solicita acesso somente depois da autorização do usuário na tela oficial do Google. As informações são utilizadas para oferecer os recursos educacionais solicitados, não são vendidas e não são usadas para publicidade. Consulte a Política de Privacidade para conhecer os dados utilizados, suas finalidades e as formas de controle e revogação.</p></section>
+
+        <section class="dados">
+            <h2>Uso das informações do Google</h2>
+            <p>
+                A Maltéria solicita acesso somente depois da autorização do usuário na tela oficial
+                do Google. As informações são utilizadas para oferecer os recursos educacionais
+                solicitados, não são vendidas e não são usadas para publicidade. Consulte a
+                Política de Privacidade para conhecer os dados utilizados, suas finalidades e as
+                formas de controle e revogação.
+            </p>
+        </section>
     </main>
-    <footer><span>© 2026 Maltéria — Uma criação de Pepi Malta.</span><a href="privacidade.html">Política de Privacidade</a><a href="termos.html">Termos de Uso</a><a href="mailto:pepimalti@gmail.com">Contato</a></footer>
+
+    <footer>
+        <span>© 2026 Maltéria — Uma criação de Pepi Malta.</span>
+        <a href="privacidade.html">Política de Privacidade</a>
+        <a href="termos.html">Termos de Uso</a>
+        <a href="mailto:pepimalti@gmail.com">Contato</a>
+    </footer>
 </body>
 </html>
