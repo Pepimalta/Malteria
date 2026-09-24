@@ -6558,3 +6558,6 @@ button:disabled { cursor: wait; opacity: .7; }
 
 /* Maltéria: PNGs locais com cores suaves */
 .malteria-imagem-3d{filter:saturate(.65);object-fit:contain;background:transparent!important;border:0!important;box-shadow:none!important}
+
+/* Tema segue a data, sem abreviações ou moldura de ícone. */
+#atalho-tema-mes{grid-template-columns:1fr;text-align:left;background:#fff;border-color:#e8e3ef}#atalho-tema-mes[data-mes="9"]{background:#fff9df;border-color:#eadb9a}#atalho-tema-mes[data-mes="12"]{background:#edf5ef;border-color:#d5e7da}#atalho-tema-mes[hidden],#abrir-tema-mes[hidden]{display:none!important}
