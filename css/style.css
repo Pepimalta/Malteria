@@ -6555,3 +6555,6 @@ button:disabled { cursor: wait; opacity: .7; }
 #atalho-tema-mes{grid-column:1/-1;background:linear-gradient(110deg,#fff8df,#fffdf6);border-color:#eee2bd}
 #atalho-tema-mes .tema-marca-mes{font-size:19px}
 @media(max-width:600px){.atalhos-inicio button{padding:18px;gap:6px 14px}.cabecalho-ferramenta .malteria-imagem-3d{width:56px;height:56px}.orbita .malteria-imagem-3d{width:48px;height:48px}}
+
+/* Maltéria: PNGs locais com cores suaves */
+.malteria-imagem-3d{filter:saturate(.65);object-fit:contain;background:transparent!important;border:0!important;box-shadow:none!important}
